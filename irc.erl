@@ -3,26 +3,63 @@
 
 -module(irc).
 -author("pizza@parseerror.com").
--export([parse/1]).
+-export([parse/1, assemble/1, privmsg/2, default_port/0]).
 -include_lib("irc.hrl").
 
 parse(Str) ->
+	% FIXME: we must preserve the rawtxt somehow...
 	Split = string:tokens(Str, ":, "),
-	irc_mkmsg(Str, Split).
+	mkmsg(Str, Split).
 
-irc_mkmsg(Raw, [Src, Type, Dst | Txt]) ->
-	#ircmsg{type=Type, src=Src, dst=Dst, txt=Txt, raw=Raw};
+%% 
 
-irc_mkmsg(Raw, ["PING", Src]) ->
-	#ircmsg{type="PING", src=Src, raw=Raw}.
+mkmsg(Raw, ["PING", Src]) ->
+	#ircmsg{type="PING", src=Src, raw=Raw};
+
+mkmsg(Raw, ["ERROR"=Src, Type, Dst | Txt]) ->
+	#ircmsg{type=Src, src=Type, dst=Dst, txt=Txt, raw=Raw};
+
+mkmsg(Raw, [Src, Type, Dst | Txt]) ->
+	#ircmsg{type=Type, src=Src, dst=Dst, txt=Txt, raw=Raw}.
+
+%%
+
+assemble(#ircmsg{type="NICK"=Type, src=Src}) ->
+	Type ++ " " ++ Src ++ "\r\n";
+
+assemble(#ircmsg{type="USER"=Type, src=Src, txt=Txt}) ->
+	Type ++ " " ++ Src ++ " " ++ join(" ", Txt) ++ "\r\n";
+
+assemble(#ircmsg{type="PONG"=Type, rawtxt=Raw}) ->
+	Type ++ " " ++ Raw ++ "\r\n";
+
+assemble(#ircmsg{type="JOIN"=Type, rawtxt=Rawtxt}) ->
+	Type ++ " :" ++ Rawtxt ++ "\r\n";
+
+assemble(#ircmsg{type="PRIVMSG"=Type, dst=Dst, txt=Txt, rawtxt=""}) ->
+	Type ++ " " ++ Dst ++ " :" ++ join(" ", Txt) ++ "\r\n";
+
+assemble(#ircmsg{type="PRIVMSG"=Type, dst=Dst, txt=[], rawtxt=Rawtxt}) ->
+	Type ++ " " ++ Dst ++ " :" ++ Rawtxt ++ "\r\n".
+
+privmsg(Dst, [[_|_]]=Say) ->
+	#ircmsg{type="PRIVMSG", dst=Dst, txt=Say};
+
+privmsg(Dst, [_|_]=Say) ->
+	#ircmsg{type="PRIVMSG", dst=Dst, rawtxt=Say}.
 
 % for some stupid reason the "lists" module doesn't have a join()...
+join(_, []) ->
+	"";
 join(Glue, [Head|Tail]) ->
-	Head ++ Glue ++ join(Glue, Tail);
-join(Glue, [Head|]) ->
-	Head;
-join(Glue, []) ->
-	"".
+	if [] == Tail ->
+		Head;
+	true ->
+		Head ++ Glue ++ join(Glue, Tail)
+	end.
+
+default_port() ->
+	6667.
 
 test() ->
 [
@@ -94,6 +131,20 @@ test() ->
         "spox!~spox@pool-98-108-144-112.ptldor.fios.verizon.net",
         "#mod_spox",
         ["mod_pizza","lol"]}
+	},
+	{
+		":jade.fl.us.dal.net 433 * mod_pizza :Nickname is already in use.",
+		{ircmsg,"433","jade.fl.us.dal.net","*",
+        ["mod_pizza","Nickname","is","already","in","use."],
+        [],
+        ":jade.fl.us.dal.net 433 * mod_pizza :Nickname is already in use."}
+	},
+	{
+		"ERROR :Closing Link: 0.0.0.0 (Ping timeout)",
+		{ircmsg,"ERROR","Closing","Link",
+        ["0.0.0.0","(Ping","timeout)"],
+        [],"ERROR :Closing Link: 0.0.0.0 (Ping timeout)"}
 	}
+
 ].
 
