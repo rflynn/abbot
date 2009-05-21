@@ -6,7 +6,7 @@
 -export([test/0]).
 -export([parse/2, msgparse/1, assemble/1, default_port/0]).
 -export([nick/1, user/1, privmsg/2, respond/3]).
--export([is_nick/1, is_chan/1]).
+-export([is_chan/1]).
 -include_lib("irc.hrl").
 
 % break a line of IRC input into an #ircmsg
@@ -20,8 +20,8 @@ msgparse(Str) ->
 	parse_(Split, Str).
 
 % guts of parse
-parse_(["PING", Src], Raw) ->
-	msg_("PING", Src, "", "", Raw);
+parse_(["PING"=Type, Src], Raw) ->
+	msg_(Src, Type, "", "", Raw);
 
 parse_(["ERROR"=Src, Type, Dst | Txt], Raw) ->
 	msg_(Src, Type, Dst, Txt, Raw);
@@ -77,11 +77,13 @@ assemble(#ircmsg{type="USER"=Type, src=Src, txt=Txt}) ->
 	Type ++ " " ++ Src ++ " " ++ join(" ", Txt) ++ "\r\n".
 
 % wrapper for building certain types of #ircmsg{}s
+
 nick(Irc)	->
 	#ircmsg{
 		type = "NICK",
 		src = (Irc#ircconn.user)#ircsrc.nick
 	}.
+
 user(Irc)	->
 	#ircmsg{
 		type = "USER",
@@ -93,6 +95,7 @@ user(Irc)	->
 			(Irc#ircconn.real)
 		]
 	}.
+
 privmsg(Dst, Say)	->
 	#ircmsg{
 		type = "PRIVMSG",
@@ -107,13 +110,14 @@ respond(Dst, Src, Say) ->
 	false -> privmsg(Src, Say)
 	end.
 
+% is a destination a channel?
+% used to differentiate between channel messages and user messages
 is_chan([$#|_]) ->
+	true;
+is_chan([$@|_]) ->
 	true;
 is_chan(_) ->
 	false.
-
-is_nick(Foo) ->
-	not is_chan(Foo).
 
 default_port() ->
 	6667.

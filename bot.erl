@@ -57,7 +57,7 @@ react(Irc, #ircmsg{type="PING", src=Src}) ->
 react(Irc, #ircmsg{type="376"}) ->
 	send(Irc, #ircmsg{type="JOIN", rawtxt=?chan});
 react(_, _) ->
-	io:write("no match.").
+	io:format("no match.~n").
 
 % gen_tcp:send wrapper for #ircmsg
 send(#ircconn{}=Irc, #ircmsg{}=Msg) ->
