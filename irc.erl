@@ -8,13 +8,21 @@
 
 parse(Str) ->
 	Split = string:tokens(Str, ":, "),
-	irc_mkmsg(Split).
+	irc_mkmsg(Str, Split).
 
-irc_mkmsg([From, Type, Target | What]) ->
-	#ircmsg{type=Type, from=From, target=Target, what=What};
+irc_mkmsg(Raw, [Src, Type, Dst | Txt]) ->
+	#ircmsg{type=Type, src=Src, dst=Dst, txt=Txt, raw=Raw};
 
-irc_mkmsg(["PING", From]) ->
-	#ircmsg{type="PING", from=From}.
+irc_mkmsg(Raw, ["PING", Src]) ->
+	#ircmsg{type="PING", src=Src, raw=Raw}.
+
+% for some stupid reason the "lists" module doesn't have a join()...
+join(Glue, [Head|Tail]) ->
+	Head ++ Glue ++ join(Glue, Tail);
+join(Glue, [Head|]) ->
+	Head;
+join(Glue, []) ->
+	"".
 
 test() ->
 [

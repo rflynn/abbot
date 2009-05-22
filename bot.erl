@@ -1,4 +1,5 @@
 % ex: set ts=2 noet:
+% $Id$
 
 -module(bot).
 -author("pizza@parseerror.com").
@@ -25,7 +26,7 @@ loop(Sock) ->
 			io:format("[~w] Recv: ~s", [Sock, Data]),
 			%parse_line(Sock, string:tokens(Data, ": ")),
 			Msg = irc:parse(Data),
-			parse_line(Sock, Msg),
+			react(Sock, Msg),
 			loop(Sock);
 		quit ->
 			io:format("[~w] Received quit message, exiting...~n", [Sock]),
@@ -40,24 +41,25 @@ send(Sock, Data=#ircmsg{}) ->
 % The following is an example of the message this fun intends to parse.  Here we see
 % the limitation that tokenizing the string on both :'s and spaces puts on us.
 % [#Port<0.124>] Received: :jroes!jroes@mask-2EDB8BDB.net PRIVMSG #jroes-test :jroes-test: wassup?
-parse_line(Sock, [User,"PRIVMSG",Channel,?nickname|_]) ->
-	Nick = lists:nth(1, string:tokens(User, "!")),
-	irc_privmsg(Sock, Channel, "You talkin to me, " ++ Nick ++ "?");
+react(Sock, #ircmsg{ type="PRIVMSG", txt=[?nickname|_] } = Msg) ->
+	Nick = lists:nth(1, string:tokens(Msg#ircmsg.src, "!")),
+	privmsg(Sock, Msg#ircmsg.dst, "You talkin to me, " ++ Nick ++ "?");
 
 % If the second token is "376", then join our channel.  376 indicates End of MOTD.
-parse_line(Sock, [_,"376"|_]) ->
+react(Sock, #ircmsg{type="376"}) ->
+%react(Sock, Msg) when Msg#ircmsg.type == "376" ->
 	send(Sock, "JOIN :" ++ ?channel ++ "\r\n");
 
 % The server will periodically send PINGs and expect you to PONG back to make sure
 % you haven't lost the connection.
-parse_line(Sock, ["PING"|Rest]) ->
-	send(Sock, "PONG " ++ Rest ++ "\r\n");
+react(Sock, #ircmsg{type="PING", rawtxt=Raw}) ->
+	send(Sock, "PONG " ++ Raw ++ "\r\n");
 
-parse_line(_, _) ->
-	0.
+react(_, _) ->
+	io:write(io:format("no match.~n")).
 
 % This just helps us write a PRIVMSG back to a client without having to type
 % the newlines and :'s ourselves so much.  It'll be more useful later.
-irc_privmsg(Sock, To, Message) ->
+privmsg(Sock, To, Message) ->
 	send(Sock, "PRIVMSG " ++ To ++ " :" ++ Message ++ "\r\n").
 
