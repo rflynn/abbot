@@ -3,65 +3,100 @@
 
 -module(bot).
 -author("pizza@parseerror.com").
--export([connect/2, connect/1, loop/1]).
+-export([connect/2, connect/1, loop/1, queue/2]).
 -define(nick, "mod_pizza").
 -define(chan, "#mod_spox").
 
 -include_lib("irc.hrl").
 -import(irc).
+-import(react).
 
 % Connect to an IRC host:port. TCP option provides line-based input.
 connect(Host, Port) ->
-	Me = #ircsrc{nick=?nick, user="blah", host="blah"},
-	Irc = #ircconn{host=Host, port=Port, key=Host, user=Me, server="blah", real="blah"},
+	Irc = #ircconn{host=Host, port=Port, key=Host, server="blah", real="blah",
+		user=#ircsrc{nick=?nick, user="blah", host="blah"}},
 	case gen_tcp:connect(Host, Port, [{packet, line}]) of
 		{ok, Sock} ->
 			io:format("Connected~n"),
 			Irc2 = Irc#ircconn{sock=Sock},
-			send(Irc2, irc:nick(Irc2)),
-			send(Irc2, irc:user(Irc2)),
+			nick(Irc2),
 			bot:loop(Irc2);
 		{error, Why} ->
 			io:format("Error: ~s~n", [Why]),
 			connect(Host, Port) % try harder. try again.
 	end.
 
-connect(Host) ->
-	connect(Host, irc:default_port()).
-
 % Now that we're connected, receive TCP messages and parse them.
 loop(Irc) ->
 	receive
 		{tcp, Sock, Data} ->
-			io:format("[~w] Recv: ~s", [Sock, Data]),
+			io:format("<<< ~s", [Data]),
 			Irc2 = Irc#ircconn{sock=Sock},
-			react(Irc2, irc:parse(Irc, Data)),
-			bot:loop(Irc2); % call explicitly by module to allow module hot-swapping
+			Irc3 = react(Irc2, irc:parse(Irc, Data)),
+			Irc4 = dequeue(Irc3, Irc3#ircconn.q),
+			bot:loop(Irc4); % by module to allow module hot-swapping
 		quit ->
-			io:format("[~w] Received quit message, exiting...~n", [Irc#ircconn.sock]),
+			io:format("[~w] Exiting...~n", [Irc#ircconn.sock]),
 			gen_tcp:close(Irc#ircconn.sock),
 			exit(stopped)
 	end.
 
 % process each line of irc input
-react(Irc, #ircmsg{type="PRIVMSG", dst=Dst, src=#ircsrc{nick=Nick}, txt=Txt}) ->
-	case lists:nth(1, Txt) == (Irc#ircconn.user)#ircsrc.nick of
-		true ->
-			send(Irc, irc:respond(Dst, Nick, "Wassup, " ++ Nick ++ "?"));
-		false -> 0
-	end;
-% PING -> PONG
+react(Irc, #ircmsg{type="PRIVMSG"}=Msg) ->
+	Irc2 = react:privmsg(Irc, Msg),
+	Irc2;
 react(Irc, #ircmsg{type="PING", src=Src}) ->
-	send(Irc, #ircmsg{type="PONG", rawtxt=Src#ircsrc.raw});
-% "376" indicates End of MOTD.
+	% PING -> PONG
+	send(Irc, #ircmsg{type="PONG", rawtxt=Src#ircsrc.raw}),
+	Irc;
 react(Irc, #ircmsg{type="376"}) ->
-	send(Irc, #ircmsg{type="JOIN", rawtxt=?chan});
-react(_, _) ->
-	io:format("no match.~n").
+	% 376 -> end of MOTD
+	send(Irc, #ircmsg{type="JOIN", rawtxt=?chan}),
+	Irc;
+react(Irc, #ircmsg{type="433"}) ->
+	% 433 -> nick already in use
+	NewNick = (Irc#ircconn.user)#ircsrc.nick ++ "_",
+	io:format("Switching nick to ~s...~n", [NewNick]),
+	NewUser = (Irc#ircconn.user)#ircsrc{nick=NewNick},
+	Irc2 = Irc#ircconn{user=NewUser},
+	nick(Irc2),
+	Irc2;
+react(Irc, _) ->
+	%io:format("no match.~n"),
+	Irc.
+
+nick(Irc) ->
+	send(Irc, irc:nick(Irc)),
+	send(Irc, irc:user(Irc)).
+
+queue(Irc, #ircmsg{}=Msg) ->
+	%io:format("que ~s", [irc:assemble(Msg)]),
+	NewQ = if
+		is_list(Irc#ircconn.q) -> Irc#ircconn.q ++ Msg;
+		true -> [ Irc#ircconn.q ] ++ Msg
+	end,
+	Irc#ircconn{q=NewQ}.
+
+dequeue(Irc, [H|T]) ->
+	%io:format("deq ~s", [irc:assemble(H)]),
+	send(Irc, H),
+	Irc#ircconn{q=T};
+
+dequeue(Irc, H) when H /= [] ->
+	%io:format("deq ~s", [irc:assemble(H)]),
+	send(Irc, H),
+	Irc#ircconn{q=[]};
+
+dequeue(Irc, _) ->
+	%io:format("deq NO MATCH, WTF~n"),
+	Irc.
 
 % gen_tcp:send wrapper for #ircmsg
-send(#ircconn{}=Irc, #ircmsg{}=Msg) ->
+send(Irc, Msg) ->
 	Data = irc:assemble(Msg),
-	io:format("[~w] Send: ~s", [Irc#ircconn.sock, Data]),
+	io:format(">>> ~s", [Data]),
 	gen_tcp:send(Irc#ircconn.sock, Data).
+
+connect(Host) ->
+	connect(Host, irc:default_port()).
 

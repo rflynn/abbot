@@ -19,18 +19,20 @@
 		user	= #ircsrc{},		% user we are on this server
 		sock  = nil,					% socket
     server= "",
-    real  = ""
+    real  = "",
+		q 		= [],						% queue of msgs to send
+		state = dict:new()		% funcall-persistent storage
 	}).
 
 -record(ircmsg,
 	{
-		host    = "",					% host received on
-		user    = "",					% user we are on this connection
-		type    = "",	  			% either a numeric irc code, PRIVMSG, NOTICE
-		src     = #ircsrc{},  % who sent the msg; either no one, the server or a user
-		dst     = "",	  			% where msg is headed; either AUTH, a nick (yourself) or a channel
-		txt     = [],					% contents of what is sent, if anything
-    rawtxt  = "",   			% unparsed, original contents of 'txt'
-    raw     = ""    			% unparsed, original contents of entire message
+		host    = "",				% host received on
+		user    = "",				% user we are on this connection
+		type    = "",	  		% either a numeric irc code, PRIVMSG, NOTICE
+		src     = #ircsrc{},% who sent the msg; either no one, the server or a user
+		dst     = "",	  		% where msg is headed; either AUTH, a nick (yourself) or a channel
+		txt     = [],				% spoken contents, if any
+    rawtxt  = "",   		% unparsed contents of 'txt'
+    raw     = ""    		% unparsed msg contents
 	}).
 

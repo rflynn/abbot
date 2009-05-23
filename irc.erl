@@ -6,7 +6,7 @@
 -export([test/0]).
 -export([parse/2, msgparse/1, assemble/1, default_port/0]).
 -export([nick/1, user/1, privmsg/2, respond/3]).
--export([is_chan/1]).
+-export([is_chan/1, join/2, j/1]).
 -include_lib("irc.hrl").
 
 % break a line of IRC input into an #ircmsg
@@ -16,7 +16,7 @@ parse(Irc, Str) ->
 
 msgparse(Str) ->
 	% FIXME: we must preserve the rawtxt somehow...
-	Split = string:tokens(Str, ":, "),
+	Split = string:tokens(Str, ":, \r\n"),
 	parse_(Split, Str).
 
 % guts of parse
@@ -32,11 +32,12 @@ parse_([Src, Type, Dst | Txt], Raw) ->
 % ircmsg wrapper
 msg_(Src, Type, Dst, Txt, Raw) ->
 	#ircmsg{
-		type = Type,
-		src  = srcparse(Src),
-		dst  = Dst,
-		txt  = Txt,
-		raw  = Raw
+		type 		= Type,
+		src  		= srcparse(Src),
+		dst  		= Dst,
+		txt  		= Txt,
+		rawtxt 	= join(" ", Txt), % FIXME: wrong
+		raw  		= Raw
 	}.
 
 % ircmsg wrapper
@@ -123,14 +124,14 @@ default_port() ->
 	6667.
 
 % for some stupid reason the "lists" module doesn't have a join()...
+join(Glue, [Head|Tail]) when Tail /= [] ->
+	Head ++ Glue ++ join(Glue, Tail);
+join(_, [Head|Tail]) when Tail == [] ->
+	Head;
 join(_, []) ->
-	"";
-join(Glue, [Head|Tail]) ->
-	if [] == Tail ->
-		Head;
-	true ->
-		Head ++ Glue ++ join(Glue, Tail)
-	end.
+	"".
+
+j(X) -> join(" ", X).
 
 % 
 test() ->
