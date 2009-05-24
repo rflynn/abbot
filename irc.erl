@@ -3,11 +3,20 @@
 
 -module(irc).
 -author("pizza@parseerror.com").
--export([test/0]).
--export([parse/2, msgparse/1, assemble/1, default_port/0]).
--export([nick/1, user/1, privmsg/2, respond/3]).
--export([is_chan/1, join/2, j/1]).
+-export([
+	state/3, parse/2, msgparse/1, str/1,
+	nick/1, user/1, privmsg/2, resp/3,
+	is_chan/1, default_port/0,
+	test/0 ]).
 -include_lib("irc.hrl").
+
+state(Irc, Key, Else) ->
+	% lookup entry in state dict by key
+	State = Irc#ircconn.state,
+	case dict:find(Key, State) of
+		error -> Else;
+		{ok, X} -> X
+	end.
 
 % break a line of IRC input into an #ircmsg
 parse(Irc, Str) ->
@@ -36,7 +45,7 @@ msg_(Src, Type, Dst, Txt, Raw) ->
 		src  		= srcparse(Src),
 		dst  		= Dst,
 		txt  		= Txt,
-		rawtxt 	= join(" ", Txt), % FIXME: wrong
+		rawtxt 	= util:j(Txt), % FIXME: wrong
 		raw  		= Raw
 	}.
 
@@ -52,30 +61,30 @@ srcparse(Src) ->
 	Tok = string:tokens(Src, "!@"),
 	case length(Tok) of
 		3 -> % user
-			Nick = lists:nth(1, Tok),
+			Nick = hd(Tok),
 			User = lists:nth(2, Tok),
 			Host = lists:nth(3, Tok),
 			#ircsrc{raw=Src, nick=Nick, user=User, host=Host};
 		1 -> % host
-			Host = lists:nth(1, Tok),
+			Host = hd(Tok),
 			#ircsrc{raw=Src, host=Host};
 		_ ->
 			#ircsrc{raw=Src}
 	end.
 
 % opposite of parse -- transform an #ircmsg into a string suitable for sending
-assemble(#ircmsg{type="PRIVMSG"=Type, dst=Dst, txt=[], rawtxt=Rawtxt}) ->
+str(#ircmsg{type="PRIVMSG"=Type, dst=Dst, txt=[], rawtxt=Rawtxt}) ->
 	Type ++ " " ++ Dst ++ " :" ++ Rawtxt ++ "\r\n";
-assemble(#ircmsg{type="PRIVMSG"=Type, dst=Dst, txt=Txt, rawtxt=""}) ->
-	Type ++ " " ++ Dst ++ " :" ++ join(" ", Txt) ++ "\r\n";
-assemble(#ircmsg{type="PONG"=Type, rawtxt=Raw}) ->
+str(#ircmsg{type="PRIVMSG"=Type, dst=Dst, txt=Txt, rawtxt=""}) ->
+	Type ++ " " ++ Dst ++ " :" ++ util:j(Txt) ++ "\r\n";
+str(#ircmsg{type="PONG"=Type, rawtxt=Raw}) ->
 	Type ++ " " ++ Raw ++ "\r\n";
-assemble(#ircmsg{type="JOIN"=Type, rawtxt=Rawtxt}) ->
+str(#ircmsg{type="JOIN"=Type, rawtxt=Rawtxt}) ->
 	Type ++ " :" ++ Rawtxt ++ "\r\n";
-assemble(#ircmsg{type="NICK"=Type, src=Src}) ->
+str(#ircmsg{type="NICK"=Type, src=Src}) ->
 	Type ++ " " ++ Src ++ "\r\n";
-assemble(#ircmsg{type="USER"=Type, src=Src, txt=Txt}) ->
-	Type ++ " " ++ Src ++ " " ++ join(" ", Txt) ++ "\r\n".
+str(#ircmsg{type="USER"=Type, src=Src, txt=Txt}) ->
+	Type ++ " " ++ Src ++ " " ++ util:j(Txt) ++ "\r\n".
 
 % wrapper for building certain types of #ircmsg{}s
 
@@ -105,7 +114,7 @@ privmsg(Dst, Say)	->
 	}.
 
 % produce the correct response based on the type of message
-respond(Dst, Src, Say) ->
+resp(Dst, Src, Say) ->
 	case is_chan(Dst) of
 	true  -> privmsg(Dst, Say);
 	false -> privmsg(Src, Say)
@@ -122,16 +131,6 @@ is_chan(_) ->
 
 default_port() ->
 	6667.
-
-% for some stupid reason the "lists" module doesn't have a join()...
-join(Glue, [Head|Tail]) when Tail /= [] ->
-	Head ++ Glue ++ join(Glue, Tail);
-join(_, [Head|Tail]) when Tail == [] ->
-	Head;
-join(_, []) ->
-	"".
-
-j(X) -> join(" ", X).
 
 % 
 test() ->
