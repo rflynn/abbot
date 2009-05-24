@@ -6,6 +6,7 @@
 -export([
 	state/3, parse/2, msgparse/1, str/1,
 	nick/1, user/1, privmsg/2, resp/3,
+	action/1,
 	is_chan/1, default_port/0,
 	test/0 ]).
 -include_lib("irc.hrl").
@@ -119,6 +120,9 @@ resp(Dst, Src, Say) ->
 	true  -> privmsg(Dst, Say);
 	false -> privmsg(Src, Say)
 	end.
+
+action(Str) ->
+	"\1" ++ "ACTION" ++ " " ++ Str ++ "\1".
 
 % is a destination a channel?
 % used to differentiate between channel messages and user messages

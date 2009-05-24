@@ -12,12 +12,17 @@
 -import(irc).
 -import(bot).
 
-privmsg(Irc, #ircmsg{type="PRIVMSG", dst=Dst, src=#ircsrc{nick=Nick}, txt=[First|Rest]}) ->
-	case First == (Irc#ircconn.user)#ircsrc.nick of
-		% are you talking to me? i don't see anyone else around here...
-		true -> act(Irc, Dst, Nick, Rest);
-		false -> Irc
+% handle a privmsg
+privmsg(Irc, #ircmsg{type="PRIVMSG", dst=Dst, src=#ircsrc{nick=From}, txt=[First|Rest]=All}) ->
+	Me = (Irc#ircconn.user)#ircsrc.nick,
+	if % are you talking to me? i don't see anyone else around here...
+		Dst == Me -> act(Irc, Dst, From, All);
+		First == Me -> act(Irc, Dst, From, Rest);
+		true -> Irc
 	end.
+
+act(Irc, _, _, ["action", Chan | What]) ->
+	bot:q(Irc, irc:privmsg(Chan, irc:action(util:j(What))));
 
 act(Irc, Dst, Nick, ["what", "is", Term]) ->
 	Is = irc:state(Irc, is, dict:new()),
