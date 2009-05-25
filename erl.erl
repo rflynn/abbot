@@ -13,20 +13,23 @@
 	enumerate_naughty/1,
 	test/0 ]).
 -import(test).
--define(allowedAtoms, [
-	nil,
-	hd, tl, apply,
-	lists,
-		any,all,filter,foldl,foldr,foreach,last,map,max,min,nth,tail,
-	string,
-		substr
+-define(allowedAtoms,
+	[
+		nil,
+		hd, tl, apply,
+		lists,
+			any,all,filter,foldl,foldr,foreach,last,map,max,min,nth,tail,
+		string,
+			substr,
+		io_lib,
+			format
 	]).
 
 % HOW TO ALLOW A SAFE SUBSET:
 % Restrict everything
-% Restrict maximum exec time to something small
-% Restrict atoms allowed to a whitelist
-% Restruct integer values even
+% TODO: Restrict maximum exec time to something small
+% DONE: Restrict atoms allowed to a whitelist
+% TODO? Restruct integer values even
 
 contains([], _) -> false;
 contains([H|T], Item) ->
@@ -35,7 +38,7 @@ contains([H|T], Item) ->
 		true -> contains(T, Item)
 	end.
 
-filter({atom,_N,Name}) ->
+filter({atom, _N, Name}) ->
 	not contains(?allowedAtoms, Name);
 filter(_) -> false.
 

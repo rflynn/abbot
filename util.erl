@@ -10,6 +10,7 @@
 		join/2, j/1,
 		rtrim/2, rtrim/1,
 		ltrim/2, ltrim/1,
+		trim/2,
 		lines/1,
 		split/3,
 		show/1,
@@ -101,6 +102,10 @@ test_ltrim() ->
 		{ " a a", "a a" },
 		{ "", "" }
 	].
+
+trim([], _) -> [];
+trim(Str, Chr) ->
+	ltrim(rtrim(Str, Chr), Chr).
 
 split(Str, Chr, Limit) ->
 	split_(Str, Chr, Limit, []).

@@ -8,7 +8,8 @@
 	[
 		test/0,
 		privmsg/2,
-		isquestion/1, dequestion/1, stripjunk/1
+		isquestion/1, dequestion/1, stripjunk/1,
+		exec/1
 	]).
 
 -include_lib("irc.hrl").
@@ -23,22 +24,10 @@ privmsg(Irc, #ircmsg{type="PRIVMSG", dst=Dst,
 	src=#ircsrc{nick=From}, txt=[First|Rest]=All, rawtxt=Rawtxt}=Msg) ->
 	Me = (Irc#ircconn.user)#ircsrc.nick,
 	if % are you talking to me? i don't see anyone else around here...
-		Dst == Me -> act(Irc, Msg, Dst, From, All);
+		Dst == Me ->
+			act(Irc, Msg, Dst, From, All);
 		First == Me ->
-			% if it's addressed to me, remove my name and any
-			% trailing punctuation and update Msg.rawtxt
-			% TODO: move this out to a separate function
-			Tok = string:tokens(Rawtxt, " :,"),
-			Rawtxt2 =
-				if
-					hd(Tok) == Me ->
-							X1 = string:substr(Rawtxt, length(Me)+1),
-							X2 = util:ltrim(X1, $,),
-							X3 = util:ltrim(X2, $:),
-							util:ltrim(X3, 32);
-					true -> Rawtxt
-					end,
-			Msg2 = Msg#ircmsg{rawtxt=Rawtxt2},
+			Msg2 = ltrim_nick(Msg, Rawtxt, Me),
 			act(Irc, Msg2, Dst, From, Rest);
 		true -> Irc
 	end.
@@ -52,30 +41,27 @@ byperm(Irc, Nick, _Perm, Exec) ->
 		false -> Irc
 		end.
 
+% IRC-related command crap
 act(Irc, _Msg, _, Nick, ["say", Chan | What]) ->
 	byperm(Irc, Nick, ["irc","say"],
 		fun() ->
 			bot:q(Irc, irc:privmsg(Chan, util:j(What)))
 			end);
-
 act(Irc, _Msg, _, Nick, ["action", Chan | What]) ->
 	byperm(Irc, Nick, ["irc","action"],
 		fun() ->
 			bot:q(Irc, irc:privmsg(Chan, irc:action(util:j(What))))
 			end);
-
 act(Irc, _Msg, _, Nick, ["join", Chan]) ->
 	byperm(Irc, Nick, ["irc","join"],
 		fun() ->
 			bot:q(Irc, #ircmsg{type="JOIN", rawtxt=Chan})
 			end);
-
 act(Irc, _Msg, _, Nick, ["part", Chan]) ->
 	byperm(Irc, Nick, ["irc","part"],
 		fun() ->
 			bot:q(Irc, #ircmsg{type="PART", rawtxt=Chan})
 			end);
-
 % evaluate the input as erlang 
 act(Irc, #ircmsg{rawtxt=Rawtxt}, Dst, Nick, ["erl" | _What]) ->
 	Code = string:substr(Rawtxt, length("erl")+1),
@@ -84,14 +70,7 @@ act(Irc, #ircmsg{rawtxt=Rawtxt}, Dst, Nick, ["erl" | _What]) ->
 		lists:map(fun(Line) -> irc:resp(Dst, Nick, Line) end,
 			RespLines),
 	bot:q(Irc, Resps);
-
-act(Irc, _Msg, Dst, Nick, ["what","is","best","in","life?"]) ->
-	bot:q(Irc,
-		irc:resp(Dst, Nick,
-			Nick ++ ": To crush your enemies, see them driven " ++
-				"before you... and to hear the lamentation of " ++
-				"their women!"));
-
+% dictionary retrieve
 act(Irc, _Msg, Dst, Nick, ["what", "is", Term]) ->
 	Is = irc:state(Irc, is, dict:new()),
 	RealTerm = hd(dequestion(stripjunk([Term]))),
@@ -101,7 +80,7 @@ act(Irc, _Msg, Dst, Nick, ["what", "is", Term]) ->
 			{ok, X} -> RealTerm ++ " is " ++ X 
 		end,
 	bot:q(Irc, irc:resp(Dst, Nick, Nick ++ ": " ++ Answer));
-
+% dictionary store
 act(Irc, _Msg, Dst, Nick, [Term, "is" | Rest]) ->
 	Is = irc:state(Irc, is, dict:new()),
 	RealTerm = hd(stripjunk([Term])),
@@ -110,14 +89,15 @@ act(Irc, _Msg, Dst, Nick, [Term, "is" | Rest]) ->
 	Irc2 = Irc#ircconn{state=State2},
 	bot:q(Irc2,
 		irc:resp(Dst, Nick, Nick ++ ": if you say so."));
-
+% hardcoded tribute to George Carlin, plus making fun of
+% mod_spox's actually-helpful weather command
 act(Irc, _Msg, Dst, Nick, ["weather"]) ->
 	bot:q(Irc,
 		irc:resp(Dst, Nick,
 			Nick ++ ": Tonight's forecast: Dark. " ++
 				"Continued dark throughout most of the evening, " ++
 				"with some widely-scattered light towards morning."));
-
+% huh?
 act(Irc, _Msg, Dst, Nick, _) ->
 	bot:q(Irc, irc:resp(Dst, Nick, Nick ++ ": huh?")).
 
@@ -232,10 +212,26 @@ exec(Code) ->
 	Out = string:join(StrLines, ""),
 	TrimQuotes = string:substr(Out, 2, length(Out)-2),
 	Unescaped = util:unescape(TrimQuotes),
+	TrimQuotes2 = util:trim(Unescaped, $"),
  	Trimmed = % limit total length
 		if
-			length(Unescaped) > 250 -> string:substr(Unescaped, 1, 247) ++ "...";
-			true -> Unescaped
+			length(TrimQuotes2) > 250 -> string:substr(TrimQuotes2, 1, 247) ++ "...";
+			true -> TrimQuotes2
 			end,
 	util:lines(Trimmed).
+
+% remove my name and any trailing punctuation and update Msg.rawtxt
+% example: "my_Nick: hello" -> "hello"
+ltrim_nick(Msg, Rawtxt, Nick) ->
+	Tok = string:tokens(Rawtxt, " :,"),
+	Rawtxt2 =
+		if
+			hd(Tok) == Nick ->
+					X1 = string:substr(Rawtxt, length(Nick)+1),
+					X2 = util:ltrim(X1, $,),
+					X3 = util:ltrim(X2, $:),
+					util:ltrim(X3, 32);
+			true -> Rawtxt
+			end,
+	Msg#ircmsg{rawtxt=Rawtxt2}.
 
