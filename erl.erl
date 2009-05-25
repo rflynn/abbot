@@ -15,7 +15,7 @@
 -import(test).
 -define(allowedAtoms, [
 	nil,
-	hd, tl,
+	hd, tl, apply,
 	lists,
 		any,all,filter,foldl,foldr,foreach,last,map,max,min,nth,tail,
 	string,
@@ -135,7 +135,8 @@ test() ->
           { "lists:map(fun(X)->X end,[1,2,3]).", [1,2,3] },
           { "lists:map(fun(X)->X*2 end,[1,2,3]).", [2,4,6] },
 					{ "Y=fun(N)->N+1 end. Y(1).", "syntax error before: " },
-					{ "apply(fun(N)->N+1 end, [1]).", "Not allowed: apply" }
+					{ "apply(fun(N)->N+1 end, [1]).", "Not allowed: apply" },
+					{ "[H|T]=[1,2,3], T.", "root@box# Nah, just kidding" }
         ]
       }
     ]
