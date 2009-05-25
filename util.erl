@@ -16,6 +16,7 @@
 		show/1,
 		nth/3,
 		unescape/1,
+		utime_diffsec/2,
 		test/0
 	]).
 -import(test).
@@ -180,4 +181,18 @@ test_nth() ->
 		{ true, [ 3, [4,5,6], nil ], 6 },
 		{ true, [ 4, [4,5,6], nil ], nil }
 	].
+
+% calculate the difference in seconds between two
+% erlang:universaltime() calls
+% NOTE: there are tons of special cases where this
+% will produce the wrong answer, oh well, close enough.
+utime_diffsec({{Y1,M1,D1},{H1,I1,S1}}=_Then,
+							{{Y2,M2,D2},{H2,I2,S2}}=_Now) ->
+	% {{2009,5,25},{4,58,17}}
+	((S2 - S1) +
+	((I2 - I1) * 60) +
+	((H2 - H1) * 60 * 60) +
+	((D2 - D1) * 60 * 60 * 24) +
+	((M2 - M1) * 60 * 60 * 24 * 31) +
+	((Y2 - Y1) * 60 * 60 * 24 * 365)).
 

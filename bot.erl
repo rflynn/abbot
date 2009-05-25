@@ -39,20 +39,6 @@ conn(Host, Port) ->
 deqt(Loop_Pid) ->
 	Loop_Pid ! deq.
 
-% calculate the difference in seconds between two
-% erlang:universaltime() calls
-% NOTE: there are tons of special cases where this
-% will produce the wrong answer, oh well, close enough.
-utime_diffsec({{Y1,M1,D1},{H1,I1,S1}}=_Then,
-							{{Y2,M2,D2},{H2,I2,S2}}=_Now) ->
-	% {{2009,5,25},{4,58,17}}
-	((S2 - S1) +
-	((I2 - I1) * 60) +
-	((H2 - H1) * 60 * 60) +
-	((D2 - D1) * 60 * 60 * 24) +
-	((M2 - M1) * 60 * 60 * 24 * 31) +
-	((Y2 - Y1) * 60 * 60 * 24 * 365)).
-
 % called regularly to dequeue irc output.
 % implements bursting as configured via the ircconn ircqopt{} structure
 deq(Irc, []) ->
@@ -66,7 +52,7 @@ deq(Irc, [_|_]=Q) ->
 	MaxBurst = util:min(length(Q), St#ircqopt.burstlines), % how many lines we can send now
 	Now = erlang:universaltime(),
 	Burst = % has it been long enough since we sent the last burst to send another?
-		case utime_diffsec(St#ircqopt.lastburst, Now) >= St#ircqopt.burstsec of
+		case util:utime_diffsec(St#ircqopt.lastburst, Now) >= St#ircqopt.burstsec of
 			true -> MaxBurst;
 			false -> 1 % hasn't been long enough 
 			end,
@@ -87,7 +73,7 @@ sendburst(Irc, Cnt) ->
 	send(Irc, H),
 	Irc2 = Irc#ircconn{q=T},
 	sendburst(Irc2, Cnt - 1).
-	
+
 % handle lines from Sock,
 % signals from deq timer
 loop(Irc) ->
@@ -98,8 +84,10 @@ loop(Irc) ->
 		{tcp, Sock, Data} ->
 			io:format("<<< ~s", [Data]),
 			Irc2 = Irc#ircconn{sock=Sock},
-			Irc3 = react(Irc2, irc:parse(Irc, Data)), % possibly queued data
-			bot:loop(Irc3);
+			Msg = irc:parse(Irc2, Data),
+			Irc3 = ircin(Irc, Msg),
+			Irc4 = react(Irc3, Msg), % possibly queued data
+			bot:loop(Irc4);
 		{tcp_closed, _Sock} ->
 			io:format("closed!~n");
 		{tcp_error, _Sock, Why} ->
@@ -113,6 +101,10 @@ loop(Irc) ->
 			gen_tcp:close(Sock),
 			exit(stopped)
 	end.
+
+% wrapper for all incoming messages
+ircin(Irc, #ircmsg{}=Msg) ->
+	irctypecnt(Irc, Msg).
 
 % process each line of irc input
 react(Irc, #ircmsg{type="PRIVMSG"}=Msg) ->
@@ -156,11 +148,22 @@ q(Irc, #ircmsg{}=Msg) ->
 send(Irc, Msg) ->
 	Data = irc:str(Msg),
 	io:format(">>> ~s", [Data]),
-	gen_tcp:send(Irc#ircconn.sock, Data).
+	gen_tcp:send(Irc#ircconn.sock, Data),
+	ircout(Irc, Msg).
+
+% wrapper for all outgoing messages
+ircout(Irc, #ircmsg{}=Msg) ->
+	irctypecnt(Irc, Msg).
 
 % connect with default irc port; convenience wrapper
 conn(Host) ->
 	conn(Host, irc:default_port()).
+
+% increment type by count
+irctypecnt(Irc, #ircmsg{type=Type}=_Msg) ->
+	D = irc:state(Irc, irctype, dict:new()),
+	D2 = dict:update_counter(Type, 1, D),
+	irc:setstate(Irc, irctype, D2).
 
 % run unit tests from all our modules
 % if any fails we should crash
