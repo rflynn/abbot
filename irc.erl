@@ -5,7 +5,8 @@
 -module(irc).
 -author("pizza@parseerror.com").
 -export([
-	state/3, parse/2, msgparse/1, str/1,
+	state/3, setstate/3,
+	parse/2, msgparse/1, str/1,
 	nick/1, user/1, privmsg/2, resp/3,
 	action/1, master/1,
 	is_chan/1, default_port/0,
@@ -21,6 +22,10 @@ state(Irc, Key, Else) ->
 		{ok, X} -> X
 	end.
 
+setstate(Irc, Key, Val) ->
+	St = dict:store(Key, Val, Irc#ircconn.state),
+	Irc#ircconn{state=St}.
+
 master(Irc) ->
 	Irc#ircconn.master.
 
@@ -30,7 +35,6 @@ parse(Irc, Str) ->
 	msgirc_(Irc, Msg).
 
 msgparse(Str) ->
-	% FIXME: we must preserve the rawtxt somehow...
 	Split = string:tokens(Str, ":, \r\n"),
 	parse_(Split, Str).
 
@@ -47,11 +51,7 @@ parse_([Src, Type, Dst | Txt], Raw) ->
 % ircmsg wrapper
 msg_(Src, Type, Dst, Txt, Raw) ->
 	R = util:split(Raw, $:, 2),
-	Rawtxt =
-		if
-			length(R) > 2 -> lists:nth(3, R);
-			true -> ""
-			end,
+	Rawtxt = util:nth(3, R, ""),
 	#ircmsg{
 		type 		= Type,
 		src  		= srcparse(Src),

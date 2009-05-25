@@ -79,27 +79,10 @@ act(Irc, _Msg, _, Nick, ["part", Chan]) ->
 % evaluate the input as erlang 
 act(Irc, #ircmsg{rawtxt=Rawtxt}, Dst, Nick, ["erl" | _What]) ->
 	Code = string:substr(Rawtxt, length("erl")+1),
-	io:format("Code=~s~n", [Code]),
-	Res = erl:eval(Code), % eval
-	Res2 = util:show(Res), % format
-	Lines = util:lines(Res2),
-	Lines2 = % limit number of lines
-		if
-			length(Lines) > 3 -> lists:sublist(Lines, 3) ++ "...";
-			true -> Lines
-			end,
-	StrLines = lists:map(fun(X) -> util:show(X) end, Lines2),
-	Out = string:join(StrLines, ""),
-	Trim = string:substr(Out, 2, length(Out)-2), % trim first and last "abc" -> abc
- 	Trimmed = % limit total length
-		if
-			length(Out) > 250 -> string:substr(Trim, 247) ++ "...";
-			true -> Trim
-			end,
-	TrimLines = util:lines(Trimmed),
+	RespLines = exec(Code),
 	Resps = % build an ircmsg for each line
 		lists:map(fun(Line) -> irc:resp(Dst, Nick, Line) end,
-			TrimLines),
+			RespLines),
 	bot:q(Irc, Resps);
 
 act(Irc, _Msg, Dst, Nick, ["what","is","best","in","life?"]) ->
@@ -233,4 +216,26 @@ test_stripjunk() ->
 		{ ["a\1","b"],		["a","b"]	},
 		{ ["\1a","b\255"],["a","b"]	}
 	].
+
+% execute erlang source code and return [ "results" ]
+% TODO: possibly make size of output configurable...
+exec(Code) ->
+	Res = erl:eval(Code), % eval
+	Res2 = util:show(Res), % format
+	Lines = util:lines(Res2),
+	Lines2 = % limit number of lines
+		if
+			length(Lines) > 3 -> lists:sublist(Lines, 3) ++ "...";
+			true -> Lines
+			end,
+	StrLines = lists:map(fun(X) -> util:show(X) end, Lines2),
+	Out = string:join(StrLines, ""),
+	TrimQuotes = string:substr(Out, 2, length(Out)-2),
+	Unescaped = util:unescape(TrimQuotes),
+ 	Trimmed = % limit total length
+		if
+			length(Unescaped) > 250 -> string:substr(Unescaped, 1, 247) ++ "...";
+			true -> Unescaped
+			end,
+	util:lines(Trimmed).
 

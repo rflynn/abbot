@@ -3,6 +3,13 @@
 
 % USER <username> <hostname> <servername> <realname>
 
+-record(ircqopt,
+	{
+		lastburst = {{0,0,0},{0,0,0}},
+		burstlines = 3,				% burst up to this many lines at once
+		burstsec = 5					% how long we must wait between bursts
+	}).
+
 -record(ircsrc,
 	{
 		raw   = "",						% raw contents of src in received msg, i.e. "foo!~foo@bar"
@@ -22,7 +29,8 @@
     real  = "",
 		master= "",
 		q 		= [],						% queue of msgs to send
-		state = dict:new()		% funcall-persistent storage
+		state = dict:new(),		% funcall-persistent storage
+		deqt	= nil						% dequeue timer ref
 	}).
 
 -record(ircmsg,
