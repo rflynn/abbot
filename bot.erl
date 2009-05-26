@@ -26,6 +26,7 @@ conn(Host, Port) ->
 	Irc = #ircconn{
 		host=Host, port=Port, key=Host, server="blah",
 		real="blah", master=?master,
+		state=irc_state_load(),
 		user=#ircsrc{
 			nick=?nick, user="blah", host="blah"}},
 	case gen_tcp:connect(Host, Port, [{packet, line}]) of
@@ -48,6 +49,9 @@ loop(Irc) ->
 		deq ->
 			Irc2 = bot:deq(Irc, Irc#ircconn.q),
 			bot:loop(Irc2);
+		save ->
+			irc_state_save(Irc),
+			bot:loop(Irc);
 		{tcp, Sock, Data} ->
 			io:format("<<< ~s", [Data]),
 			Irc2 = Irc#ircconn{sock=Sock},
@@ -56,10 +60,13 @@ loop(Irc) ->
 			Irc4 = react(Irc3, Msg), % possibly queued data
 			bot:loop(Irc4);
 		{tcp_closed, _Sock} ->
+			irc_state_save(Irc),
 			io:format("closed!~n");
 		{tcp_error, _Sock, Why} ->
+			irc_state_save(Irc),
 			io:format("error: ~s!~n", [Why]);
 		quit ->
+			irc_state_save(Irc),
 			Sock = Irc#ircconn.sock,
 			Deqt = Irc#ircconn.deqt,
 			io:format("[~w] Cancelling timer ~w...~n", [Sock, Deqt]),
@@ -169,6 +176,23 @@ irctypecnt(Irc, #ircmsg{type=Type}=_Msg) ->
 	D = irc:state(Irc, irctype, dict:new()),
 	D2 = dict:update_counter(Type, 1, D),
 	irc:setstate(Irc, irctype, D2).
+
+irc_state_load() ->
+	case file:read_file("store/Irc.state") of
+		{ok, Binary} -> Binary;
+		{error, Why} ->
+			io:format("Error loading state: ~p~n", [Why]),
+			dict:new()
+		end.
+
+irc_state_save(State) ->
+	Bytes = term_to_binary(State),
+	case file:write_file("store/Irc.state", Bytes) of
+		ok -> true;
+		{error, Why} ->
+			io:format("Error saving state: ~p~n", [Why]),
+			false
+		end.
 
 % run unit tests from all our modules
 % if any fails we should crash

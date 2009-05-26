@@ -94,7 +94,9 @@ act(Irc, #ircmsg{rawtxt=Rawtxt}, Dst, Nick, ["erl" | _What]) ->
 act(Irc, _Msg, Dst, Nick, ["what", "is" | Term]) ->
 	Is = irc:state(Irc, is, dict:new()),
 	JTerm = util:join("", Term),
+	io:format("get JTerm=<~s>~n", [JTerm]),
 	RealTerm = dequestion(stripjunk([JTerm])),
+	io:format("get RealTerm=<~s>~n", [RealTerm]),
 	Answer = 
 		case dict:find(RealTerm, Is) of
 			error -> "I don't know";
@@ -105,6 +107,7 @@ act(Irc, _Msg, Dst, Nick, ["what", "is" | Term]) ->
 act(Irc, _Msg, Dst, Nick, [Term, "is" | Rest]) ->
 	Is = irc:state(Irc, is, dict:new()),
 	RealTerm = hd(stripjunk([Term])),
+	io:format("set RealTerm=<~s>~n", [RealTerm]),
 	Is2 = dict:store(RealTerm, util:j(Rest), Is),
 	Irc2 = irc:setstate(Irc, is, Is2),
 	bot:q(Irc2,
