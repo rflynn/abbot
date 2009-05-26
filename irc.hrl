@@ -20,6 +20,7 @@
 		sock  = nil,					% socket
     server= "",
     real  = "",
+		master= "",
 		q 		= [],						% queue of msgs to send
 		state = dict:new()		% funcall-persistent storage
 	}).

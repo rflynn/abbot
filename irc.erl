@@ -1,14 +1,16 @@
 % ex: set ts=2 noet:
 % $Id$
+% generic irc protocol structures, serializer/unseralizers
 
 -module(irc).
 -author("pizza@parseerror.com").
 -export([
 	state/3, parse/2, msgparse/1, str/1,
 	nick/1, user/1, privmsg/2, resp/3,
-	action/1,
+	action/1, master/1,
 	is_chan/1, default_port/0,
-	test/0 ]).
+	test/0
+	]).
 -include_lib("irc.hrl").
 
 state(Irc, Key, Else) ->
@@ -18,6 +20,9 @@ state(Irc, Key, Else) ->
 		error -> Else;
 		{ok, X} -> X
 	end.
+
+master(Irc) ->
+	Irc#ircconn.master.
 
 % break a line of IRC input into an #ircmsg
 parse(Irc, Str) ->
@@ -41,12 +46,18 @@ parse_([Src, Type, Dst | Txt], Raw) ->
 
 % ircmsg wrapper
 msg_(Src, Type, Dst, Txt, Raw) ->
+	R = util:split(Raw, $:, 2),
+	Rawtxt =
+		if
+			length(R) > 2 -> lists:nth(3, R);
+			true -> ""
+			end,
 	#ircmsg{
 		type 		= Type,
 		src  		= srcparse(Src),
 		dst  		= Dst,
 		txt  		= Txt,
-		rawtxt 	= util:j(Txt), % FIXME: wrong
+		rawtxt 	= Rawtxt,
 		raw  		= Raw
 	}.
 
@@ -81,6 +92,8 @@ str(#ircmsg{type="PRIVMSG"=Type, dst=Dst, txt=Txt, rawtxt=""}) ->
 str(#ircmsg{type="PONG"=Type, rawtxt=Raw}) ->
 	Type ++ " " ++ Raw ++ "\r\n";
 str(#ircmsg{type="JOIN"=Type, rawtxt=Rawtxt}) ->
+	Type ++ " :" ++ Rawtxt ++ "\r\n";
+str(#ircmsg{type="PART"=Type, rawtxt=Rawtxt}) ->
 	Type ++ " :" ++ Rawtxt ++ "\r\n";
 str(#ircmsg{type="NICK"=Type, src=Src}) ->
 	Type ++ " " ++ Src ++ "\r\n";

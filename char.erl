@@ -1,9 +1,15 @@
 % ex: set ts=2 noet:
 % $Id$
 
--module(ctype).
+-module(char).
 -author("pizza@parseerror.com").
--export([ispunct/1, isalnum/1, isctrl/1, isspace/1, isprint/1]).
+-export([
+	ispunct/1,
+	isalnum/1,
+	isctrl/1,
+	isspace/1,
+	isprint/1
+	]).
 
 ispunct(Char) ->
 	((Char >= $!) and (Char =< $/)) or

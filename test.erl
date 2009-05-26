@@ -13,7 +13,6 @@ unit(Mod, Tests) ->
     true -> true;
     false ->
       io:format("Test failed.~n"),
-      %halt(),
       false
     end.
 

@@ -1,9 +1,11 @@
 % ex: set ts=2 noet:
 % $Id$
+% top-level bot loop; should be fairly generic
 
 -module(bot).
 -author("pizza@parseerror.com").
 -export([conn/2, conn/1, loop/1, q/2]).
+-define(master, "pizza_").
 -define(nick, "mod_pizza").
 -define(chan, "#mod_spox").
 
@@ -15,7 +17,7 @@
 conn(Host, Port) ->
 	test(),
 	Irc = #ircconn{
-		host=Host, port=Port, key=Host, server="blah", real="blah",
+		host=Host, port=Port, key=Host, server="blah", real="blah", master="pizza_",
 		user=#ircsrc{
 			nick=?nick, user="blah", host="blah"}},
 	case gen_tcp:connect(Host, Port, [{packet, line}]) of
@@ -69,6 +71,14 @@ nick(Irc) ->
 	send(Irc, irc:nick(Irc)),
 	send(Irc, irc:user(Irc)).
 
+q(Irc, []) -> Irc;
+
+q(Irc, [#ircmsg{}=Head|Tail]) ->
+	io:format("que ~s", [irc:str(Head)]),
+	NewQ = Irc#ircconn.q ++ [Head],
+	Irc2 = Irc#ircconn{q=NewQ},
+	q(Irc2, Tail);
+
 q(Irc, #ircmsg{}=Msg) ->
 	io:format("que ~s", [irc:str(Msg)]),
 	NewQ = Irc#ircconn.q ++ [Msg],
@@ -94,5 +104,15 @@ conn(Host) ->
 % run unit tests from all our modules
 % if any fails we should crash
 test() ->
-	react:test().
+	case (
+		util:test() and
+		erl:test() and
+		react:test()
+		) of
+		true -> true;
+		false ->
+			io:format("Unit tests failed, halting.~n"),
+			halt(),
+			false
+		end.
 
