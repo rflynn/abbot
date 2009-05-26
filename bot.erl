@@ -147,7 +147,7 @@ ircin(Irc, #ircmsg{}=Msg) ->
 % identify ourselves to the network
 nick(Irc) ->
 	bot:q(Irc, [ irc:nick(Irc),
-	             irc:user(Irc2) ]).
+	             irc:user(Irc) ]).
 
 % gen_tcp:send wrapper for #ircmsg
 send(Irc, Msg) ->

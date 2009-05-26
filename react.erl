@@ -91,9 +91,10 @@ act(Irc, #ircmsg{rawtxt=Rawtxt}, Dst, Nick, ["erl" | _What]) ->
 			RespLines),
 	bot:q(Irc, Resps);
 % dictionary retrieve
-act(Irc, _Msg, Dst, Nick, ["what", "is", Term]) ->
+act(Irc, _Msg, Dst, Nick, ["what", "is" | Term]) ->
 	Is = irc:state(Irc, is, dict:new()),
-	RealTerm = hd(dequestion(stripjunk([Term]))),
+	JTerm = util:join("", Term),
+	RealTerm = dequestion(stripjunk([JTerm])),
 	Answer = 
 		case dict:find(RealTerm, Is) of
 			error -> "I don't know";
