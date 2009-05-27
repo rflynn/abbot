@@ -10,7 +10,7 @@
 		q/2, deq/2, deqt/1,
 		nick/1
 	]).
--define(master, "pizza__").
+-define(master, "pizza_").
 -define(nick, "mod_pizza").
 -define(chan, "#mod_spox").
 -define(burstlines, 3).

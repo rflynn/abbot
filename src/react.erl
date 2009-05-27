@@ -71,6 +71,11 @@ act(Irc, _Msg, _, Nick, ["part", Chan]) ->
 		fun() ->
 			bot:q(Irc, #ircmsg{type="PART", rawtxt=Chan})
 			end);
+act(Irc, _Msg, _, Nick, ["quit" | Snarky]) ->
+	byperm(Irc, Nick, ["irc","quit"],
+		fun() ->
+			bot:q(Irc, #ircmsg{type="QUIT", rawtxt=util:j(Snarky)})
+			end);
 act(Irc, _Msg, Dst, Nick, ["irc", "msgtypes"]) ->
 	byperm(Irc, Nick, ["irc","msgtypes"],
 		fun() ->
@@ -107,8 +112,9 @@ act(Irc, _Msg, Dst, Nick, [Term, "are" | Rest]) ->
 % dict forget
 act(Irc, _Msg, Dst, Nick, ["forget" | Term]) ->
 	Is = irc:state(Irc, is, dict:new()),
-	RealTerm = util:nth(1, ircutil:stripjunk([Term]), ""),
-	Is2 = dict:erase(RealTerm, Is),
+	Term2 = dict_term(Term),
+	io:format("dict_forget Term=~p Term2=~p~n", [Term, Term2]),
+	Is2 = dict:erase(Term2, Is),
 	Irc2 = irc:setstate(Irc, is, Is2),
 	bot:q(Irc2,
 		irc:resp(Dst, Nick, Nick ++ ": forgotten."));
@@ -152,8 +158,8 @@ dict_set(Irc, Dst, Nick, "you", Rest) ->
 	dict_set(Irc, Dst, Nick, "i", Rest);
 dict_set(Irc, Dst, Nick, Term, Rest) ->
 	Is = irc:state(Irc, is, dict:new()),
-	Term2 = util:nth(1, ircutil:stripjunk([Term]), ""),
-	Val = util:j(Rest),
+	Term2 = dict_term(Term),
+	Val = util:j(ircutil:stripjunk(Rest)),
 	io:format("dict_get Term2=~p Val=~p~n", [Term2, Val]),
 	Is2 = dict:store(Term2, Val, Is),
 	Irc2 = irc:setstate(Irc, is, Is2),
@@ -166,15 +172,20 @@ dict_get(Irc, Dst, Nick, _Connect, ["you"]) ->
 	dict_get(Irc, Dst, Nick, "am", ["i"]);
 dict_get(Irc, Dst, Nick, Connect, Term) ->
 	Is = irc:state(Irc, is, dict:new()),
-	Term2 = util:join("", Term),
-	Term3 = util:nth(1, ircutil:dequestion(ircutil:stripjunk([Term2])), ""),
+	Term2 = dict_term(Term),
 	Answer = 
-		case dict:find(Term3, Is) of
+		case dict:find(Term2, Is) of
 			error -> "I don't know";
-			{ok, X} -> Term3 ++ " " ++ Connect ++ " " ++ X 
+			{ok, X} -> Term2 ++ " " ++ Connect ++ " " ++ X 
 		end,
-	io:format("dict_get Term3=~p Answer=~p~n", [Term3, Answer]),
+	io:format("dict_get Term2=~p Answer=~p~n", [Term2, Answer]),
 	bot:q(Irc, irc:resp(Dst, Nick, Nick ++ ": " ++ Answer)).
+
+dict_term(Term) ->
+	J = util:join("", Term),
+	Strip = ircutil:stripjunk([J]),
+	Deq = ircutil:dequestion(Strip),
+	util:nth(1, Deq, "").
 
 % execute erlang source code and return [ "results" ]
 % TODO: possibly make size of output configurable...

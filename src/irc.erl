@@ -108,11 +108,13 @@ str(#ircmsg{type="PONG"=Type, rawtxt=Raw}) ->
 str(#ircmsg{type="JOIN"=Type, rawtxt=Rawtxt}) ->
 	Type ++ " :" ++ Rawtxt ++ "\r\n";
 str(#ircmsg{type="PART"=Type, rawtxt=Rawtxt}) ->
-	Type ++ " :" ++ Rawtxt ++ "\r\n";
+	Type ++ " " ++ Rawtxt ++ "\r\n";
 str(#ircmsg{type="NICK"=Type, src=Src}) ->
 	Type ++ " " ++ Src ++ "\r\n";
 str(#ircmsg{type="USER"=Type, src=Src, txt=Txt}) ->
-	Type ++ " " ++ Src ++ " " ++ util:j(Txt) ++ "\r\n".
+	Type ++ " " ++ Src ++ " " ++ util:j(Txt) ++ "\r\n";
+str(#ircmsg{type="QUIT"=Type, rawtxt=Rawtxt}) ->
+	Type ++ " :" ++ Rawtxt ++ "\r\n".
 
 % wrapper for building certain types of #ircmsg{}s
 
