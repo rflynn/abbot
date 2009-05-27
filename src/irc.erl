@@ -35,40 +35,42 @@ parse(Irc, Str) ->
 	msgirc_(Irc, Msg).
 
 msgparse(Str) ->
-	%Split = string:tokens(Str, ":, \r\n"),
-	%"pizza_!~pizza_@12.229.112.195 PRIVMSG #mod_spox :mod_pizza_: whoops is a:, b\r\n"
-	Split = util:tokens(Str, ": ", 4),
+	Trim = string:tokens(Str, "\r\n"), % nuke newlines
+	Split = util:tokens(hd(Trim), ": ", 4), % split line into consituent parts
 	io:format("Split=~p Str=~p~n", [Split,Str]),
 	parse_(Split, Str).
 
 % guts of parse
 parse_(["PING"=Type, Src], Raw) ->
-	msg_(Src, Type, "", "", Raw);
-
+	msg_(Src, Type, "", [], Raw);
 parse_(["ERROR"=Src, Type, Dst | Txt], Raw) ->
 	msg_(Src, Type, Dst, Txt, Raw);
-
 parse_([Src, Type, Dst | Txt], Raw) ->
 	msg_(Src, Type, Dst, Txt, Raw).
 
 % ircmsg wrapper
 msg_(Src, Type, Dst, Txt, Raw) ->
-	Txt2 = util:nth(1, Txt, ""),
-	Txt3 = string:tokens(Txt2, " \r\n"),
-	[First|Rest] = Txt3,
-	% trim leading and following : and trailing , from first term, if it exists
-	First2 = util:trim(First, $:),
-	First3 = util:rtrim(First2, $,),
-	Txt4 = [ First3 ] ++ Rest,
+	RealTxt =
+		if
+			length(Txt) > 0 ->
+				Txt2 = util:nth(1, Txt, ""),
+				Txt3 = string:tokens(Txt2, " "),
+				[First|Rest] = Txt3,
+				% trim leading and following : and trailing , from first term, if it exists
+				First2 = util:trim(First, $:),
+				First3 = util:rtrim(First2, $,),
+				[ First3 ] ++ Rest;
+			true -> []
+		end,
 	R = util:split(Raw, $:, 2),
 	Rawtxt = util:nth(3, R, ""),
-	io:format("msg_ Txt=~p Txt4=~p Rawtxt=~p Src=~p~n",
-		[Txt, Txt4, Rawtxt, Src]),
+	io:format("msg_ Txt=~p RealTxt=~p Rawtxt=~p Src=~p~n",
+		[Txt, RealTxt, Rawtxt, Src]),
 	#ircmsg{
 		type 		= Type,
 		src  		= srcparse(Src),
 		dst  		= Dst,
-		txt  		= Txt4,
+		txt  		= RealTxt,
 		rawtxt 	= Rawtxt,
 		raw  		= Raw
 	}.
