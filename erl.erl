@@ -6,8 +6,6 @@
 -author("pizza@parseerror.com").
 -export([
   eval/1,
-	eval_timed/2,
-	eval_run/2,
 	filter/1,
 	is_naughty/1,
 	enumerate_naughty/1,
@@ -49,21 +47,9 @@ is_naughty(Tok) ->
 enumerate_naughty(Tok) ->
 	R1 = lists:map(fun(X) -> {X,erl:filter(X)} end, Tok),
 	R2 = lists:filter(fun({_,Y}) -> Y =:= true end, R1),
-	R3 = lists:map(fun({{atom,_,X},_}) -> atom_to_list(X) end, R2),
+	R3 = lists:map(
+		fun({{atom,_,X},_}) -> atom_to_list(X) end, R2),
 	"Not allowed: " ++ string:join(R3, ", ").
-
-% eval Str for no more than Msec milliseconds
-% try to use this to limit the damage people can do, it won't work very well though
-eval_timed(Str, Msec) ->
-	Eval_Pid = spawn(erl, eval_run, [Str, self()]),
-	case timer:kill_after(Msec, Eval_Pid) of
-		{ok, _TRef} -> "ok";
-		{error,Reason2} -> Reason2
-		end.
-
-eval_run(Str, Pid) ->
-	Res = eval(Str),
-	Pid ! {eval_done, Res}.
 
 eval(Str) ->
   try
@@ -72,36 +58,41 @@ eval(Str) ->
 		if
 			Naughty -> enumerate_naughty(Tokens);
 			true ->
-    		case erl_parse:parse_exprs(Tokens) of
-      		{ok, [Form]} -> 
-        		Bindings = erl_eval:new_bindings(),
-        		try
+      	try
+    			case erl_parse:parse_exprs(Tokens) of
+      			{ok, [Form]} -> 
+        			Bindings = erl_eval:new_bindings(),
           		case erl_eval:expr(Form, Bindings) of
             		{value, Fun, _} -> Fun;
             		_ -> "wtf"
-          		end
-        		catch
-          		error:{unbound_var,Var} ->
-            		"Unbound: " ++ atom_to_list(Var);
-          		error:undef ->
-            		[{Mod,Func,_}|_] = erlang:get_stacktrace(),
-            		Name =
-              		case Mod of
-                		erl_eval -> 
-                  		atom_to_list(Func);
-                		_ ->
-                  		atom_to_list(Mod) ++ ":" ++
-                  		atom_to_list(Func)
-              		end,
-              		"Undef fun: " ++ Name ++ "()";
-          		error:illegal_expr -> "Illegal expr";
-          		error:E -> atom_to_list(E)
+          		end;
+						{ok, Form} ->
+        			Bindings = erl_eval:new_bindings(),
+          		case erl_eval:expr(Form, Bindings) of
+           			{value, Fun, _} -> Fun;
+           			_ -> "wtf"
           		end;
         		{error, {_Errno, erl_parse, [_Msg, _Code]}} ->
-        			_Msg;
-        		_ -> "root@box# Nah, just kidding"
+        			_Msg
       		end
-			end
+       	catch
+       		error:{unbound_var,Var} ->
+         		"Unbound: " ++ atom_to_list(Var);
+        	error:undef ->
+         		[{Mod,Func,_}|_] = erlang:get_stacktrace(),
+           	Name =
+           		case Mod of
+             		erl_eval -> 
+             			atom_to_list(Func);
+             		_ ->
+                 	atom_to_list(Mod) ++ ":" ++
+                 	atom_to_list(Func)
+           		end,
+            	"Undef fun: " ++ Name ++ "()";
+         	error:illegal_expr -> "Illegal expr";
+         	error:E -> atom_to_list(E)
+       	end
+		end
   catch
     _ -> "Error"
   end.
@@ -138,8 +129,8 @@ test() ->
           { "lists:map(fun(X)->X end,[1,2,3]).", [1,2,3] },
           { "lists:map(fun(X)->X*2 end,[1,2,3]).", [2,4,6] },
 					{ "Y=fun(N)->N+1 end. Y(1).", "syntax error before: " },
-					{ "apply(fun(N)->N+1 end, [1]).", "Not allowed: apply" },
-					{ "[H|T]=[1,2,3], T.", "root@box# Nah, just kidding" }
+					{ "apply(fun(N)->N+1 end, [1]).", 2 },
+					{ "[H|T]=[1,2,3], T.", "function_clause" }
         ]
       }
     ]

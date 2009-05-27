@@ -20,10 +20,16 @@
 -import(erl).
 
 % handle a privmsg
-privmsg(Irc, #ircmsg{type="PRIVMSG", dst=Dst,
-	src=#ircsrc{nick=From}, txt=[First|Rest]=All, rawtxt=Rawtxt}=Msg) ->
+privmsg(Irc,
+	#ircmsg{
+		type="PRIVMSG",
+		dst=Dst,
+		src=#ircsrc{nick=From},
+		txt=[First|Rest]=All,
+		rawtxt=Rawtxt
+	}=Msg) ->
 	Me = (Irc#ircconn.user)#ircsrc.nick,
-	if % are you talking to me? i don't see anyone else around here...
+	if % are you talking to me? i don't see anyone else...
 		Dst == Me ->
 			act(Irc, Msg, Dst, From, All);
 		First == Me ->
@@ -72,7 +78,8 @@ act(Irc, _Msg, Dst, Nick, ["irc", "msgtypes"]) ->
 			% TODO: sort
 			Out = "types:" ++
 				lists:foldl(fun({K,Cnt}, Acc) -> Acc ++
-					lists:flatten(io_lib:format(" ~s=~p",[K,Cnt])) end, "", KV),
+					lists:flatten(io_lib:format(" ~s=~p",[K,Cnt])) end,
+					"", KV),
 			bot:q(Irc, irc:resp(Dst, Nick, Out))
 			end);
 % evaluate the input as erlang 

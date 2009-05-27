@@ -4,8 +4,13 @@
 
 -module(bot).
 -author("pizza@parseerror.com").
--export([conn/2, conn/1, loop/1, q/2, deqt/1]).
--define(master, "pizza_").
+-export(
+	[
+		conn/2, conn/1, loop/1,
+		q/2, deq/2, deqt/1,
+		nick/1
+	]).
+-define(master, "pizza__").
 -define(nick, "mod_pizza").
 -define(chan, "#mod_spox").
 -define(burstlines, 3).
@@ -19,28 +24,89 @@
 conn(Host, Port) ->
 	test(),
 	Irc = #ircconn{
-		host=Host, port=Port, key=Host, server="blah", real="blah", master="pizza_",
+		host=Host, port=Port, key=Host, server="blah",
+		real="blah", master=?master,
 		user=#ircsrc{
 			nick=?nick, user="blah", host="blah"}},
 	case gen_tcp:connect(Host, Port, [{packet, line}]) of
 		{ok, Sock} ->
 			io:format("Connected~n"),
 			Irc2 = Irc#ircconn{sock=Sock},
-			nick(Irc2),
+			Irc3 = nick(Irc2),
 			Deqt = timer:apply_interval(1000, bot, deqt, [self()]),
-			Irc3 = Irc2#ircconn{deqt=Deqt},
-			bot:loop(Irc3);
+			Irc4 = Irc3#ircconn{deqt=Deqt},
+			bot:loop(Irc4);
 		{error, Why} ->
 			io:format("Error: ~s~n", [Why]),
 			conn(Host, Port) % try harder. try again.
 	end.
+
+% handle lines from Sock,
+% signals from deq timer
+loop(Irc) ->
+	receive
+		deq ->
+			Irc2 = bot:deq(Irc, Irc#ircconn.q),
+			bot:loop(Irc2);
+		{tcp, Sock, Data} ->
+			io:format("<<< ~s", [Data]),
+			Irc2 = Irc#ircconn{sock=Sock},
+			Msg = irc:parse(Irc2, Data),
+			Irc3 = ircin(Irc2, Msg),
+			Irc4 = react(Irc3, Msg), % possibly queued data
+			bot:loop(Irc4);
+		{tcp_closed, _Sock} ->
+			io:format("closed!~n");
+		{tcp_error, _Sock, Why} ->
+			io:format("error: ~s!~n", [Why]);
+		quit ->
+			Sock = Irc#ircconn.sock,
+			Deqt = Irc#ircconn.deqt,
+			io:format("[~w] Cancelling timer ~w...~n", [Sock, Deqt]),
+			timer:cancel(Deqt),
+			io:format("[~w] Exiting...~n", [Sock]),
+			gen_tcp:close(Sock),
+			exit(stopped)
+	end.
+
+% process each line of irc input
+react(Irc, #ircmsg{type="PRIVMSG"}=Msg) ->
+	react:privmsg(Irc, Msg);
+react(Irc, #ircmsg{type="PING", src=Src}) -> % PING -> PONG
+	bot:q(Irc, #ircmsg{type="PONG", rawtxt=Src#ircsrc.raw});
+react(Irc, #ircmsg{type="376"}) -> % end of MOTD
+	bot:q(Irc, #ircmsg{type="JOIN", rawtxt=?chan});
+react(Irc, #ircmsg{type="433"}) -> % nick already in use
+	NewNick = (Irc#ircconn.user)#ircsrc.nick ++ "_",
+	io:format("Switching nick to ~s...~n", [NewNick]),
+	NewUser = (Irc#ircconn.user)#ircsrc{nick=NewNick},
+	Irc2 = Irc#ircconn{user=NewUser},
+	bot:nick(Irc2);
+react(Irc, #ircmsg{type="ERROR", src=_Src}) -> % Oh noes...
+	Irc;
+react(Irc, _) ->
+	Irc.
+
+% queue an #ircmsg{} for sending
+q(Irc, []) ->
+	Irc;
+q(Irc, [#ircmsg{}=Head|Tail]) ->
+	io:format("que ~s", [irc:str(Head)]),
+	NewQ = Irc#ircconn.q ++ [Head],
+	Irc2 = Irc#ircconn{q=NewQ},
+	q(Irc2, Tail);
+q(Irc, #ircmsg{}=Msg) ->
+	io:format("que ~s", [irc:str(Msg)]),
+	NewQ = Irc#ircconn.q ++ [Msg],
+	Irc2 = Irc#ircconn{q=NewQ},
+	Irc2.
 
 % signal loop to dequeue output at a regular interval
 deqt(Loop_Pid) ->
 	Loop_Pid ! deq.
 
 % called regularly to dequeue irc output.
-% implements bursting as configured via the ircconn ircqopt{} structure
+% implements bursting cfged via ircconn ircqopt{}
 deq(Irc, []) ->
 	Irc;
 deq(Irc, [_|_]=Q) ->
@@ -49,11 +115,11 @@ deq(Irc, [_|_]=Q) ->
 			burstlines = ?burstlines,
 			burstsec = ?burstsec
 		}),
-	MaxBurst = util:min(length(Q), St#ircqopt.burstlines), % how many lines we can send now
+	MaxBurst = util:min(length(Q), St#ircqopt.burstlines),
 	Now = erlang:universaltime(),
-	Burst = % has it been long enough since we sent the last burst to send another?
+	Burst = % has it been long enough since last burst?
 		case util:utime_diffsec(St#ircqopt.lastburst, Now) >= St#ircqopt.burstsec of
-			true -> MaxBurst;
+			true -> MaxBurst; % burst away
 			false -> 1 % hasn't been long enough 
 			end,
 	Irc2 = sendburst(Irc, Burst),
@@ -74,75 +140,14 @@ sendburst(Irc, Cnt) ->
 	Irc2 = Irc#ircconn{q=T},
 	sendburst(Irc2, Cnt - 1).
 
-% handle lines from Sock,
-% signals from deq timer
-loop(Irc) ->
-	receive
-		deq ->
-			Irc2 = deq(Irc, Irc#ircconn.q),
-			bot:loop(Irc2);
-		{tcp, Sock, Data} ->
-			io:format("<<< ~s", [Data]),
-			Irc2 = Irc#ircconn{sock=Sock},
-			Msg = irc:parse(Irc2, Data),
-			Irc3 = ircin(Irc, Msg),
-			Irc4 = react(Irc3, Msg), % possibly queued data
-			bot:loop(Irc4);
-		{tcp_closed, _Sock} ->
-			io:format("closed!~n");
-		{tcp_error, _Sock, Why} ->
-			io:format("error: ~s!~n", [Why]);
-		quit ->
-			Sock = Irc#ircconn.sock,
-			Deqt = Irc#ircconn.deqt,
-			io:format("[~w] Cancelling timer ~w...~n", [Sock, Deqt]),
-			timer:cancel(Deqt),
-			io:format("[~w] Exiting...~n", [Sock]),
-			gen_tcp:close(Sock),
-			exit(stopped)
-	end.
-
 % wrapper for all incoming messages
 ircin(Irc, #ircmsg{}=Msg) ->
 	irctypecnt(Irc, Msg).
 
-% process each line of irc input
-react(Irc, #ircmsg{type="PRIVMSG"}=Msg) ->
-	react:privmsg(Irc, Msg);
-react(Irc, #ircmsg{type="PING", src=Src}) -> % PING -> PONG
-	send(Irc, #ircmsg{type="PONG", rawtxt=Src#ircsrc.raw}),
-	Irc;
-react(Irc, #ircmsg{type="376"}) -> % end of MOTD
-	send(Irc, #ircmsg{type="JOIN", rawtxt=?chan}),
-	Irc;
-react(Irc, #ircmsg{type="433"}) -> % nick already in use
-	NewNick = (Irc#ircconn.user)#ircsrc.nick ++ "_",
-	io:format("Switching nick to ~s...~n", [NewNick]),
-	NewUser = (Irc#ircconn.user)#ircsrc{nick=NewNick},
-	Irc2 = Irc#ircconn{user=NewUser},
-	nick(Irc2),
-	Irc2;
-react(Irc, _) ->
-	Irc.
-
 % identify ourselves to the network
 nick(Irc) ->
-	send(Irc, irc:nick(Irc)),
-	send(Irc, irc:user(Irc)).
-
-% queue an #ircmsg for sending
-q(Irc, []) ->
-	Irc;
-q(Irc, [#ircmsg{}=Head|Tail]) ->
-	io:format("que ~s", [irc:str(Head)]),
-	NewQ = Irc#ircconn.q ++ [Head],
-	Irc2 = Irc#ircconn{q=NewQ},
-	q(Irc2, Tail);
-q(Irc, #ircmsg{}=Msg) ->
-	io:format("que ~s", [irc:str(Msg)]),
-	NewQ = Irc#ircconn.q ++ [Msg],
-	Irc2 = Irc#ircconn{q=NewQ},
-	Irc2.
+	bot:q(Irc, [ irc:nick(Irc),
+	             irc:user(Irc2) ]).
 
 % gen_tcp:send wrapper for #ircmsg
 send(Irc, Msg) ->
@@ -175,8 +180,8 @@ test() ->
 		) of
 		true -> true;
 		false ->
-			io:format("Unit tests failed, halting.~n"),
-			halt(),
+			io:format("Unit tests failed, exiting.~n"),
+			exit(0),
 			false
 		end.
 
