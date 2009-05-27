@@ -152,8 +152,10 @@ dict_set(Irc, Dst, Nick, "you", Rest) ->
 	dict_set(Irc, Dst, Nick, "i", Rest);
 dict_set(Irc, Dst, Nick, Term, Rest) ->
 	Is = irc:state(Irc, is, dict:new()),
-	RealTerm = util:nth(1, ircutil:stripjunk([Term]), ""),
-	Is2 = dict:store(RealTerm, util:j(Rest), Is),
+	Term2 = util:nth(1, ircutil:stripjunk([Term]), ""),
+	Val = util:j(Rest),
+	io:format("dict_get Term2=~p Val=~p~n", [Term2, Val]),
+	Is2 = dict:store(Term2, Val, Is),
 	Irc2 = irc:setstate(Irc, is, Is2),
 	bot:q(Irc2,
 		irc:resp(Dst, Nick, Nick ++ ": if you say so.")).
@@ -171,6 +173,7 @@ dict_get(Irc, Dst, Nick, Connect, Term) ->
 			error -> "I don't know";
 			{ok, X} -> Term3 ++ " " ++ Connect ++ " " ++ X 
 		end,
+	io:format("dict_get Term3=~p Answer=~p~n", [Term3, Answer]),
 	bot:q(Irc, irc:resp(Dst, Nick, Nick ++ ": " ++ Answer)).
 
 % execute erlang source code and return [ "results" ]

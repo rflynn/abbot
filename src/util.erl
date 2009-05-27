@@ -12,6 +12,7 @@
 		ltrim/2, ltrim/1,
 		trim/2,
 		split/3,
+		tokens/3,
 		show/1,
 		nth/3,
 		unescape/1,
@@ -25,13 +26,14 @@
 test() ->
 	test:unit(util,
 		[
-			{ j, 				test_j()					},
+			{ join, 		test_join()				},
 			{ rtrim, 		test_rtrim()			},
 			{ ltrim, 		test_ltrim()			},
 			{ show, 		test_show()				},
 			{ unescape, test_unescape()		},
 			{ nth, 			test_nth()				},
-			{ split, 		test_split()			}
+			{ split, 		test_split()			},
+			{ tokens,		test_tokens()			}
 		]).
 
 min(A, B) ->
@@ -40,6 +42,8 @@ min(A, B) ->
 		true -> B
 		end.
 
+join(_, []) ->
+	[];
 join(_, [Head]) when is_integer(Head)->
 	[ Head ];
 join(_, [Head]) ->
@@ -49,20 +53,20 @@ join(Glue, [Head|Tail]) when is_integer(Head) ->
 join(Glue, [Head|Tail]) when is_tuple(Head) ->
 	tuple_to_list(Head) ++ Glue ++ join(Glue, Tail);
 join(Glue, [Head|Tail]) ->
-	Head ++ Glue ++ join(Glue, Tail);
-join(_, []) ->
-	"".
+	Head ++ Glue ++ join(Glue, Tail).
+
+test_join() ->
+	[
+		{ [ "", "" ], "" },
+		{ [ ":", "" ], "" },
+		{ [ "", ["a"]], "a" },
+		{ [ "", ["a","b"] ], "ab" },
+		{ [ " ", ["a","b"] ], "a b" }
+		%{ [ " ", [$1,$2] ], "1 2" } % strange results i don't understand
+	].
 
 % wrapper for most common join
 j(X) -> join(" ", X).
-
-test_j() ->
-	[
-		{ [ [] ], [] },
-		{ [ [""] ], "" },
-		{ [ ["a","b"] ], "a b" }
-		%{ [$1,$2], "1 2" }
-	].
 
 rtrim("", _) -> "";
 rtrim(Word, Trim) when is_list(Word) ->
@@ -140,6 +144,62 @@ test_split() ->
 		{ [ "a:b:c", $:, 3 ], ["a","b","c"] },
 		{ [ "a,b,c", $:, 3 ], ["a,b,c"] }
 	].
+
+
+% split Str by any of the characters appearing in Split, producing a
+% list of results at most Limit items in length
+tokens(Str, Split, Limit) ->
+	tokens_(Str, Split, Split, Limit, [], []).
+
+tokens_([], _, _, _, List, []) ->
+	% empty string
+	List;
+tokens_([], _, _, _, List, Unsplit) ->
+	% end of non-empty string
+	List ++ [ Unsplit ];
+tokens_(Rest, _, _, 0, List, Unsplit) ->
+	% limit reached
+	List ++ [ Unsplit ++ Rest ];
+tokens_(Rest, _, _, 1, List, Unsplit) ->
+	% limit reached
+	List ++ [ Unsplit ++ Rest ];
+tokens_([StrH|StrT], Split, [], Limit, List, Unsplit) ->
+	% end of split, no match; char is unsplit, start over with split on rest of string
+	tokens_(StrT, Split, Split, Limit, List, Unsplit ++ [StrH]);
+tokens_([StrH|StrT], Split, [SplitH|_], Limit, List, []) when StrH =:= SplitH ->
+	% split match with empty unsplit, ditch unsplit, start over on rest of string
+	tokens_(StrT, Split, Split, Limit, List, []);
+tokens_([StrH|StrT], Split, [SplitH|_], Limit, List, Unsplit) when StrH =:= SplitH ->
+	% split match, save unsplit, start over on rest of string
+	tokens_(StrT, Split, Split, Limit-1, List ++ [Unsplit], []);
+tokens_([StrH|_]=Str, Split, [SplitH|SplitT], Limit, List, Unsplit) when StrH /= SplitH ->
+	% no split match, try more split chars on same string
+	tokens_(Str, Split, SplitT, Limit, List, Unsplit).
+
+test_tokens() ->
+	[
+		{ [ "", "", 0 ], [] },
+		{ [ "", "", 1 ], [] },
+		{ [ "", ":", 0 ], [] },
+		{ [ "", ":", 1 ], [] },
+		{ [ "a", ":", 0 ], ["a"] },
+		{ [ "a", ":", 1 ], ["a"] },
+		{ [ "a:", ":", 1 ], ["a:"] },
+		{ [ "a:b", ":", 1 ], ["a:b"] },
+		{ [ "a:b", ":", 2 ], ["a","b"] },
+		{ [ "a:b:c", ":", 2 ], ["a","b:c"] },
+		{ [ "a:b:c", ":", 3 ], ["a","b","c"] },
+		{ [ "a,b,c", ":", 3 ], ["a,b,c"] },
+		{ [ "a,b:c", ":,", 0 ], ["a,b:c"] },
+		{ [ "a,b:c", ":,", 1 ], ["a,b:c"] },
+		{ [ "a,b:c", ":,", 2 ], ["a","b:c"] },
+		{ [ "a,b:c", ":,", 3 ], ["a","b","c"] },
+		{ [ "a,b:c", ":,", 4 ], ["a","b","c"] },
+		{ [ ":a,b:c", ":,", 4 ], ["a","b","c"] },
+		{ [ ":pizza_!~pizza_@a.b.c.d PRIVMSG #foo :mod_pizza_: whoops is a:, b", ": ", 4 ],
+			["pizza_!~pizza_@a.b.c.d", "PRIVMSG", "#foo", ":mod_pizza_: whoops is a:, b"] }
+	].
+
 
 % show X in the most human-friendly way
 show(X) ->
