@@ -186,6 +186,7 @@ irc_state_load() ->
 		end.
 
 irc_state_save(Irc) ->
+	util:ensure_dir("store"),
 	State = Irc#ircconn.state,
 	Bytes = term_to_binary(State),
 	case file:write_file("store/Irc.state", Bytes) of

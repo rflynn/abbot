@@ -18,6 +18,7 @@
 		unescape/1,
 		utime_diffsec/2,
 		readlines/1,
+		ensure_dir/1,
 		test/0
 	]).
 -import(test).
@@ -198,12 +199,21 @@ utime_diffsec({{Y1,M1,D1},{H1,I1,S1}}=_Then,
 	((Y2 - Y1) * 60 * 60 * 24 * 365)).
 
 readlines(FileName) ->
-    {ok, Device} = file:open(FileName, [read]),
-    get_all_lines(Device, []).
+	case file:open(FileName, [read]) of
+		{ok, Dev} -> get_all_lines(Dev, []);
+		{error, _Why} -> []
+	end.
 
 get_all_lines(Device, Accum) ->
-    case io:get_line(Device, "") of
-        eof  -> file:close(Device), Accum;
-        Line -> get_all_lines(Device, Accum ++ [Line])
-    end.
+	case io:get_line(Device, "") of
+		eof  -> file:close(Device), Accum;
+		Line -> get_all_lines(Device, Accum ++ [Line])
+	end.
+
+ensure_dir(Dir) ->
+	case file:make_dir(Dir) of
+		ok -> true;
+		{error, eexist} -> true;
+		Whoops -> Whoops
+	end.
 
