@@ -32,5 +32,5 @@ isctrl(Char) ->
 	((Char =< 31) or (Char >= 128)).
 
 isprint(Char) ->
-	isalnum(Char) or ispunct(Char) or isspace(Char).
+	isalnum(Char) or isspace(Char) or ispunct(Char).
 

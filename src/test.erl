@@ -50,11 +50,11 @@ each(Mod, Func, [Expect|Rest], Total, Passed) ->
   each(Mod, Func, Rest, Total, Passed + Add).
 
 % mod:func(data) == expect?
-one(Mod, Func, Input, Expect) ->
-  Result = apply(Mod, Func, [Input]),
+one(Mod, Func, Input, Expect) when is_list(Input) ->
+  Result = apply(Mod, Func, Input),
   case Expect == Result of
     false ->
-			io:format("\t~p(~p) = ~p vs. ~p~n",
+			io:format("\t~p(~p) = Expected(~p) Result(~p)~n",
 				[Func, Input, Expect, Result]);
 		true -> nil
     end,

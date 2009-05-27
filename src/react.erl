@@ -8,7 +8,6 @@
 	[
 		test/0,
 		privmsg/2,
-		isquestion/1, dequestion/1, stripjunk/1,
 		exec/1
 	]).
 
@@ -16,8 +15,12 @@
 -import(test).
 -import(char).
 -import(irc).
+-import(ircutil).
 -import(bot).
 -import(erl).
+
+test() ->
+	true.
 
 % handle a privmsg
 privmsg(Irc,
@@ -91,25 +94,24 @@ act(Irc, #ircmsg{rawtxt=Rawtxt}, Dst, Nick, ["erl" | _What]) ->
 		lists:map(fun(Line) -> irc:resp(Dst, Nick, Line) end,
 			RespLines),
 	bot:q(Irc, Resps);
-% dictionary retrieve
+% dict get
 act(Irc, _Msg, Dst, Nick, ["what", "is" | Term]) ->
-	Is = irc:state(Irc, is, dict:new()),
-	JTerm = util:join("", Term),
-	RealTerm = util:nth(1, dequestion(stripjunk([JTerm])), ""),
-	Answer = 
-		case dict:find(RealTerm, Is) of
-			error -> "I don't know";
-			{ok, X} -> RealTerm ++ " is " ++ X 
-		end,
-	bot:q(Irc, irc:resp(Dst, Nick, Nick ++ ": " ++ Answer));
-% dictionary store
+	dict_get(Irc, Dst, Nick, "is", Term);
+act(Irc, _Msg, Dst, Nick, ["what", "are" | Term]) ->
+	dict_get(Irc, Dst, Nick, "are", Term);
+% dict store
 act(Irc, _Msg, Dst, Nick, [Term, "is" | Rest]) ->
+	dict_set(Irc, Dst, Nick, Term, Rest);
+act(Irc, _Msg, Dst, Nick, [Term, "are" | Rest]) ->
+	dict_set(Irc, Dst, Nick, Term, Rest);
+% dict forget
+act(Irc, _Msg, Dst, Nick, ["forget" | Term]) ->
 	Is = irc:state(Irc, is, dict:new()),
-	RealTerm = util:nth(1, stripjunk([Term]), ""),
-	Is2 = dict:store(RealTerm, util:j(Rest), Is),
+	RealTerm = util:nth(1, ircutil:stripjunk([Term]), ""),
+	Is2 = dict:erase(RealTerm, Is),
 	Irc2 = irc:setstate(Irc, is, Is2),
 	bot:q(Irc2,
-		irc:resp(Dst, Nick, Nick ++ ": if you say so."));
+		irc:resp(Dst, Nick, Nick ++ ": forgotten."));
 % hardcoded tribute to George Carlin, plus making fun of
 % mod_spox's actually-helpful weather command
 act(Irc, _Msg, Dst, Nick, ["weather"]) ->
@@ -134,105 +136,42 @@ act(Irc, _Msg, Dst, Nick, ["quote", Someone]) ->
 			end;
 		true -> Irc
 	end;
+act(Irc, _Msg, Dst, Nick, ["help"]) ->
+	bot:q(Irc, irc:resp(Dst, Nick, Nick ++ ": [" ++
+		"{Foo, \"is\" | Def}, " ++
+		"{\"what\", \"is\", Foo}, " ++
+		"{\"erl\", Code}, " ++
+		"{\"irc\", \"msgtypes\"}, " ++
+		"{\"weather\"}" ++
+		"]"));
 % huh?
 act(Irc, _Msg, Dst, Nick, _) ->
 	bot:q(Irc, irc:resp(Dst, Nick, Nick ++ ": huh?")).
 
-test() ->
-	test:unit(react,
-		[
-			{ isquestion, test_isquestion() },
-			{ dequestion,	test_dequestion()	},
-			{ stripjunk,  test_stripjunk()  }
-		]).
+dict_set(Irc, Dst, Nick, "you", Rest) ->
+	dict_set(Irc, Dst, Nick, "i", Rest);
+dict_set(Irc, Dst, Nick, Term, Rest) ->
+	Is = irc:state(Irc, is, dict:new()),
+	RealTerm = util:nth(1, ircutil:stripjunk([Term]), ""),
+	Is2 = dict:store(RealTerm, util:j(Rest), Is),
+	Irc2 = irc:setstate(Irc, is, Is2),
+	bot:q(Irc2,
+		irc:resp(Dst, Nick, Nick ++ ": if you say so.")).
 
-% is the input a question?
-isquestion([[]]) ->
-	false;
-isquestion([H|_]=Words) when is_list(H)  ->
-	$? == lists:last(lists:last(Words));
-isquestion(_) ->
-	false.
-
-test_isquestion() ->
-	[
-		{ nil, 				false },
-		{ 0, 					false },
-		{ "?", 				false },
-		{ [], 				false },
-		{ [""], 			false },
-		{ ["!"], 			false },
-		{ ["?!"], 		false },
-		{ ["?"], 			true  },
-		{ ["??"], 		true  },
-		{ ["???"], 		true  },
-		{ ["a?"], 		true  },
-		{ ["a","b?"], true  }
-	].
-
-% remove trailing "?" from wordlist
-dequestion([]) ->
-	[];
-dequestion([[]]) ->
-	[[]];
-dequestion(Words) when is_list(Words) ->
-	LastWord = lists:last(Words),
-	Rest = lists:sublist(Words, length(Words)-1),
-	Trimmed = util:rtrim(LastWord, $?),
-	case Trimmed of
-		"" -> dequestion(Rest);
-		_ -> Rest ++ [ Trimmed ]
-		end.
-
-test_dequestion() ->
-	[
-		% in  out
-		{ [], [] },
-		{ [""], [""] },
-		{ ["?"], [] },
-		{ ["!"], ["!"] },
-		{ [[$"]], [[$"]] },
-		{ ["a"], ["a"] },
-		{ ["ab"], ["ab"] },
-		{ ["a?"], ["a"] },
-		{ ["a??"], ["a"] },
-		{ ["c#?"], ["c#"] },
-		{ ["a???"], ["a"] },
-		{ ["a","b"], ["a","b"] },
-		{ ["a","b?"], ["a","b"] },
-		{ ["a?","b?"], ["a?","b"] }
-	].
-
-% remove all unprintable chars from all words
-% in a wordlist; and remove any words that consisted
-% entirely of them
-stripjunk([]) -> [];
-stripjunk([[]]) -> [[]];
-stripjunk([H|_]=Words) when is_list(H) ->
-	% filter junk chars
-	Strip =
-		lists:map(
-			fun(W) -> lists:filter(
-				fun(X) -> char:isprint(X) end, W) end,
-			Words),
-	% filter empty words
-	lists:filter(fun(W) -> W /= [] end, Strip).
-
-test_stripjunk() ->
-	[
-		% in  out
-		{ [],     				[]   			},
-		{ [""], 					[""] 			},
-		{ ["a"], 					["a"] 		},
-		{ ["ab"],					["ab"] 		},
-		{ ["a","b"],			["a","b"] },
-		{ [[1]],  				[]  			},
-		{ ["a\1"], 				["a"]			},
-		{ ["\1a"], 				["a"]			},
-		{ ["\1a\2"],			["a"]			},
-		{ ["a\1","b"],		["a","b"]	},
-		{ ["\1a","b\255"],["a","b"]	}
-	].
+dict_get(Irc, Dst, Nick, _Connect, ["you?"]) ->
+	dict_get(Irc, Dst, Nick, "am", ["i"]);
+dict_get(Irc, Dst, Nick, _Connect, ["you"]) ->
+	dict_get(Irc, Dst, Nick, "am", ["i"]);
+dict_get(Irc, Dst, Nick, Connect, Term) ->
+	Is = irc:state(Irc, is, dict:new()),
+	Term2 = util:join("", Term),
+	Term3 = util:nth(1, ircutil:dequestion(ircutil:stripjunk([Term2])), ""),
+	Answer = 
+		case dict:find(Term3, Is) of
+			error -> "I don't know";
+			{ok, X} -> Term3 ++ " " ++ Connect ++ " " ++ X 
+		end,
+	bot:q(Irc, irc:resp(Dst, Nick, Nick ++ ": " ++ Answer)).
 
 % execute erlang source code and return [ "results" ]
 % TODO: possibly make size of output configurable...

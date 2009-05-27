@@ -11,7 +11,6 @@
 		rtrim/2, rtrim/1,
 		ltrim/2, ltrim/1,
 		trim/2,
-		lines/1,
 		split/3,
 		show/1,
 		nth/3,
@@ -26,11 +25,13 @@
 test() ->
 	test:unit(util,
 		[
-			{ j, test_j() },
-			{ rtrim, test_rtrim() },
-			{ ltrim, test_ltrim() },
-			{ show, test_show() },
-			{ unescape, test_unescape() }
+			{ j, 				test_j()					},
+			{ rtrim, 		test_rtrim()			},
+			{ ltrim, 		test_ltrim()			},
+			{ show, 		test_show()				},
+			{ unescape, test_unescape()		},
+			{ nth, 			test_nth()				},
+			{ split, 		test_split()			}
 		]).
 
 min(A, B) ->
@@ -57,9 +58,9 @@ j(X) -> join(" ", X).
 
 test_j() ->
 	[
-		{ [], [] },
-		{ [""], "" },
-		{ ["a","b"], "a b" }
+		{ [ [] ], [] },
+		{ [ [""] ], "" },
+		{ [ ["a","b"] ], "a b" }
 		%{ [$1,$2], "1 2" }
 	].
 
@@ -76,12 +77,12 @@ rtrim(Str) ->
 
 test_rtrim() ->
 	[
-		{ "", "" },
-		{ " ", "" },
-		{ "a", "a" },
-		{ "aa", "aa" },
-		{ "a ", "a" },
-		{ " a ", " a" }
+		{ [ "" ], "" },
+		{ [ " " ], "" },
+		{ [ "a" ], "a" },
+		{ [ "aa" ], "aa" },
+		{ [ "a " ], "a" },
+		{ [ " a " ], " a" }
 	].
 
 ltrim(Str) ->
@@ -95,15 +96,15 @@ ltrim(Str, _) ->
 
 test_ltrim() ->
 	[
-		{ "", "" },
-		{ " ", "" },
-		{ "  ", "" },
-		{ "a", "a" },
-		{ "aa", "aa" },
-		{ " aa", "aa" },
-		{ "  aa", "aa" },
-		{ " a a", "a a" },
-		{ "", "" }
+		{ [ "" ], "" },
+		{ [ " " ], "" },
+		{ [ "  " ], "" },
+		{ [ "a" ], "a" },
+		{ [ "aa" ], "aa" },
+		{ [ " aa" ], "aa" },
+		{ [ "  aa" ], "aa" },
+		{ [ " a a" ], "a a" },
+		{ [ "" ], "" }
 	].
 
 trim([], _) -> [];
@@ -111,22 +112,34 @@ trim(Str, Chr) ->
 	ltrim(rtrim(Str, Chr), Chr).
 
 split(Str, Chr, Limit) ->
-	split_(Str, Chr, Limit, []).
+	split_(Str, Chr, Limit, [], []).
 
-split_(Str, _, Limit, List) when Limit == 0 ->
-	List ++ [Str];
-split_(Str, Chr, Limit, List) when Limit > 0 ->
-	Index = string:chr(Str, Chr),
-	case Index of
-		0 -> split_(Str, Chr, 0, List);
-		_ ->
-			Left = string:substr(Str, 1, Index-1),
-			Right = string:substr(Str, Index+1),
-			split_(Right, Chr, Limit-1, List ++ [ Left ])
-			end.
+split_([], _, _, List, []) ->
+	List;
+split_([], _, _, List, Unsplit) ->
+	List ++ [ Unsplit ];
+split_(Rest, _, 0, List, Unsplit) ->
+	List ++ [ Unsplit ++ Rest ];
+split_(Rest, _, 1, List, Unsplit) ->
+	List ++ [ Unsplit ++ Rest ];
+split_([Chr|Rest], Chr, Limit, List, Unsplit) ->
+	split_(Rest, Chr, Limit-1, List ++ [Unsplit], []);
+split_([NoMatch|Rest], Chr, Limit, List, Unsplit) ->
+	split_(Rest, Chr, Limit, List, Unsplit ++ [ NoMatch ]).
 
-lines(Str) ->
-	string:tokens(Str, "\n").
+test_split() ->
+	[
+		{ [ "", $:, 0 ], [] },
+		{ [ "", $:, 1 ], [] },
+		{ [ "a", $:, 0 ], ["a"] },
+		{ [ "a", $:, 1 ], ["a"] },
+		{ [ "a:", $:, 1 ], ["a:"] },
+		{ [ "a:b", $:, 1 ], ["a:b"] },
+		{ [ "a:b", $:, 2 ], ["a","b"] },
+		{ [ "a:b:c", $:, 2 ], ["a","b:c"] },
+		{ [ "a:b:c", $:, 3 ], ["a","b","c"] },
+		{ [ "a,b,c", $:, 3 ], ["a,b,c"] }
+	].
 
 % show X in the most human-friendly way
 show(X) ->
@@ -134,13 +147,13 @@ show(X) ->
 
 test_show() ->
 	[
-		{ "", "[]" },
-		{ nil, "nil" },
-		{ [], "[]" },
-		{ 0, "0" },
-		{ "a", "\"a\"" },
-		{ [1,2,3], "[1,2,3]" },
-		{ "abc", "\"abc\"" }
+		{ [ "" ], "[]" },
+		{ [ nil ], "nil" },
+		{ [ [] ], "[]" },
+		{ [ 0 ], "0" },
+		{ [ "a" ], "\"a\"" },
+		{ [ [1,2,3] ], "[1,2,3]" },
+		{ [ "abc" ], "\"abc\"" }
 	].
 
 unescape([]) ->
@@ -162,11 +175,13 @@ unescape_([H,T|Rest], Done) ->
 
 test_unescape() ->
 	[
-		{ "\\\"hello\\\"", "\"hello\""},
-		{ "\\\"a\\\n\\\b\\\"", "\"a\n\b\""}
+		{ ["\\\"hello\\\"" ], "\"hello\""},
+		{ [ "\\\"a\\\n\\\b\\\"" ], "\"a\n\b\""}
 	].
 
-nth(N, List, Else) when N >= 0 ->
+nth(0, _, Else) ->
+	Else;
+nth(N, List, Else) when N > 0 ->
 	if
 		length(List) < N -> Else;
 		true -> lists:nth(N, List)
@@ -174,14 +189,14 @@ nth(N, List, Else) when N >= 0 ->
 
 test_nth() ->
 	[
-		{ true, [ 0, [], nil ], nil },
-		{ true, [ 1, [], nil ], nil },
-		{ true, [ 100, [], nil ], nil },
-		{ true, [ 0, [4,5,6], nil ], nil },
-		{ true, [ 1, [4,5,6], nil ], 4 },
-		{ true, [ 2, [4,5,6], nil ], 5 },
-		{ true, [ 3, [4,5,6], nil ], 6 },
-		{ true, [ 4, [4,5,6], nil ], nil }
+		{ [ 0, [], nil ], 			nil },
+		{ [ 1, [], nil ], 			nil },
+		{ [ 100, [], nil ], 		nil },
+		{ [ 0, [4,5,6], nil ], 	nil },
+		{ [ 1, [4,5,6], nil ], 	4 },
+		{ [ 2, [4,5,6], nil ], 	5 },
+		{ [ 3, [4,5,6], nil ], 	6 },
+		{ [ 4, [4,5,6], nil ], 	nil }
 	].
 
 % calculate the difference in seconds between two

@@ -202,6 +202,7 @@ test() ->
 	case (
 		util:test() and
 		erl:test() and
+		ircutil:test() and
 		react:test()
 		) of
 		true -> true;

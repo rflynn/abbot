@@ -36,6 +36,11 @@ parse(Irc, Str) ->
 
 msgparse(Str) ->
 	Split = string:tokens(Str, ":, \r\n"),
+	%Split = util:tokens(Str, ": ", 2),
+	%Txt = util:nth(3, Split, ""),
+	%SplitTxt = string:tokens(Txt, " \r\n"),
+	%io:format("Split=~p Txt=~p SplitTxt=~p~n",
+		%[Split,Txt,SplitTxt]),
 	parse_(Split, Str).
 
 % guts of parse
