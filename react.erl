@@ -118,6 +118,14 @@ act(Irc, _Msg, Dst, Nick, ["weather"]) ->
 			Nick ++ ": Tonight's forecast: Dark. " ++
 				"Continued dark throughout most of the evening, " ++
 				"with some widely-scattered light towards morning."));
+act(Irc, _Msg, Dst, Nick, ["quote", "bender"]) ->
+	% TODO: generalize for anyone... be careful of scary
+	% filepaths though!
+	Quotes = util:readlines("quote/bender"),
+	Quote = util:rtrim(
+		lists:nth(random:uniform(length(Quotes)), Quotes), 10),
+	bot:q(Irc,
+		irc:resp(Dst, Nick, Quote));
 % huh?
 act(Irc, _Msg, Dst, Nick, _) ->
 	bot:q(Irc, irc:resp(Dst, Nick, Nick ++ ": huh?")).

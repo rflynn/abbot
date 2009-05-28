@@ -17,6 +17,7 @@
 		nth/3,
 		unescape/1,
 		utime_diffsec/2,
+		readlines/1,
 		test/0
 	]).
 -import(test).
@@ -195,4 +196,14 @@ utime_diffsec({{Y1,M1,D1},{H1,I1,S1}}=_Then,
 	((D2 - D1) * 60 * 60 * 24) +
 	((M2 - M1) * 60 * 60 * 24 * 31) +
 	((Y2 - Y1) * 60 * 60 * 24 * 365)).
+
+readlines(FileName) ->
+    {ok, Device} = file:open(FileName, [read]),
+    get_all_lines(Device, []).
+
+get_all_lines(Device, Accum) ->
+    case io:get_line(Device, "") of
+        eof  -> file:close(Device), Accum;
+        Line -> get_all_lines(Device, Accum ++ [Line])
+    end.
 
