@@ -75,11 +75,12 @@ act(Irc, _Msg, Dst, Nick, ["irc", "msgtypes"]) ->
 			KV = lists:map(
 				fun(K) -> {K, dict:fetch(K, St)} end,
 				dict:fetch_keys(St)),
-			% TODO: sort
+			Sorted = lists:sort(
+				fun({_,A},{_,B}) -> A > B end, KV),
 			Out = "types:" ++
 				lists:foldl(fun({K,Cnt}, Acc) -> Acc ++
 					lists:flatten(io_lib:format(" ~s=~p",[K,Cnt])) end,
-					"", KV),
+					"", Sorted),
 			bot:q(Irc, irc:resp(Dst, Nick, Out))
 			end);
 % evaluate the input as erlang 
@@ -94,9 +95,7 @@ act(Irc, #ircmsg{rawtxt=Rawtxt}, Dst, Nick, ["erl" | _What]) ->
 act(Irc, _Msg, Dst, Nick, ["what", "is" | Term]) ->
 	Is = irc:state(Irc, is, dict:new()),
 	JTerm = util:join("", Term),
-	io:format("get JTerm=<~s>~n", [JTerm]),
-	RealTerm = dequestion(stripjunk([JTerm])),
-	io:format("get RealTerm=<~s>~n", [RealTerm]),
+	RealTerm = util:nth(1, dequestion(stripjunk([JTerm])), ""),
 	Answer = 
 		case dict:find(RealTerm, Is) of
 			error -> "I don't know";
@@ -106,8 +105,7 @@ act(Irc, _Msg, Dst, Nick, ["what", "is" | Term]) ->
 % dictionary store
 act(Irc, _Msg, Dst, Nick, [Term, "is" | Rest]) ->
 	Is = irc:state(Irc, is, dict:new()),
-	RealTerm = hd(stripjunk([Term])),
-	io:format("set RealTerm=<~s>~n", [RealTerm]),
+	RealTerm = util:nth(1, stripjunk([Term]), ""),
 	Is2 = dict:store(RealTerm, util:j(Rest), Is),
 	Irc2 = irc:setstate(Irc, is, Is2),
 	bot:q(Irc2,

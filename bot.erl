@@ -143,9 +143,9 @@ sendburst(Irc, 0) ->
 sendburst(Irc, Cnt) ->
 	[H|T] = Irc#ircconn.q,
 	io:format("deq ~s", [irc:str(H)]),
-	send(Irc, H),
-	Irc2 = Irc#ircconn{q=T},
-	sendburst(Irc2, Cnt - 1).
+	Irc2 = send(Irc, H),
+	Irc3 = Irc2#ircconn{q=T},
+	sendburst(Irc3, Cnt - 1).
 
 % wrapper for all incoming messages
 ircin(Irc, #ircmsg{}=Msg) ->
@@ -179,13 +179,14 @@ irctypecnt(Irc, #ircmsg{type=Type}=_Msg) ->
 
 irc_state_load() ->
 	case file:read_file("store/Irc.state") of
-		{ok, Binary} -> Binary;
+		{ok, Binary} -> binary_to_term(Binary);
 		{error, Why} ->
 			io:format("Error loading state: ~p~n", [Why]),
 			dict:new()
 		end.
 
-irc_state_save(State) ->
+irc_state_save(Irc) ->
+	State = Irc#ircconn.state,
 	Bytes = term_to_binary(State),
 	case file:write_file("store/Irc.state", Bytes) of
 		ok -> true;
