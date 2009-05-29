@@ -71,6 +71,13 @@ act(Irc, _Msg, _, Nick, ["part", Chan]) ->
 		fun() ->
 			bot:q(Irc, #ircmsg{type="PART", rawtxt=Chan})
 			end);
+act(Irc, _Msg, _, Nick, ["nick", NewNick]) ->
+	byperm(Irc, Nick, ["irc","nick"],
+		fun() ->
+			NewUser = (Irc#ircconn.user)#ircsrc{nick=NewNick},
+			Irc2 = Irc#ircconn{user=NewUser},
+			bot:nick(Irc2)
+			end);
 act(Irc, _Msg, _, Nick, ["quit" | Snarky]) ->
 	byperm(Irc, Nick, ["irc","quit"],
 		fun() ->
