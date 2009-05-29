@@ -35,9 +35,10 @@ parse(Irc, Str) ->
 	msgirc_(Irc, Msg).
 
 msgparse(Str) ->
-	Trim = string:tokens(Str, "\r\n"), % nuke newlines
-	Split = util:tokens(hd(Trim), ": ", 4), % split line into consituent parts
-	Str2 = ircutil:stripjunk([Str]),
+	% TODO: cleanup so we process an irc message in the simplest possible way
+	Trim = lists:flatten(string:tokens(Str, "\r\n")),
+	Split = util:tokens(Trim, ": ", 4), % split line into consituent parts
+	Str2 = ircutil:stripjunk([Trim]),
 	Split2 = ircutil:stripjunk(Split),
 	io:format("Split2=~p Str2=~p~n", [Split2,Str2]),
 	parse_(Split2, Str2).
@@ -66,8 +67,9 @@ msg_(Src, Type, Dst, Txt, Raw) ->
 				[ First3 ] ++ Rest;
 			true -> []
 		end,
-	R = util:split(Raw, $:, 3),
-	Rawtxt = util:nth(3, R, ""),
+	R = util:tokens(lists:flatten(Raw), ":", 2),
+	Rawtxt = util:nth(2, R, ""),
+	io:format("msg_ Raw=~p~n", [Raw]),
 	io:format("msg_ Txt=~p~n", [Txt]),
 	io:format("msg_ RealTxt=~p~n", [RealTxt]),
 	io:format("msg_ Rawtxt=~p~n", [Rawtxt]),

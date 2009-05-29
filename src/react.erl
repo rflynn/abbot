@@ -121,8 +121,8 @@ act(Irc, _Msg, Dst, Nick, ["forget" | Term]) ->
 		irc:resp(Dst, Nick, Nick ++ ": forgotten."));
 
 % evaluate the input as erlang 
-act(Irc, #ircmsg{rawtxt=Rawtxt}, Dst, Nick, ["erl" | _What]) ->
-	Code = string:substr(Rawtxt, length("erl")+1),
+act(Irc, #ircmsg{rawtxt="erl " ++ Rawtxt}, Dst, Nick, ["erl" | _What]) ->
+	Code = Rawtxt,
 	io:format("Code=~p~n", [Code]),
 	RespLines = exec(Code),
 	Resps = % build an ircmsg for each line
@@ -197,7 +197,7 @@ dict_set(Irc, Dst, Nick, "you", Rest) ->
 dict_set(Irc, Dst, Nick, Term, Rest) ->
 	Is = irc:state(Irc, is, dict:new()),
 	Term2 = dict_term(Term),
-	Val = util:j(ircutil:stripjunk(Rest)),
+	Val = util:j(Rest),
 	io:format("dict_get Term2=~p Val=~p~n", [Term2, Val]),
 	Is2 = dict:store(Term2, Val, Is),
 	Irc2 = irc:setstate(Irc, is, Is2),
@@ -221,8 +221,7 @@ dict_get(Irc, Dst, Nick, Connect, Term) ->
 
 dict_term(Term) ->
 	J = util:join("", Term),
-	Strip = ircutil:stripjunk([J]),
-	Deq = ircutil:dequestion(Strip),
+	Deq = ircutil:dequestion([J]),
 	util:nth(1, Deq, "").
 
 % execute erlang source code and return [ "results" ]
