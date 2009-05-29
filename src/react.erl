@@ -205,11 +205,12 @@ act(Irc, _Msg, Dst, Nick, ["help", "irc"]) ->
 act(Irc, _Msg, Dst, Nick, _) ->
 	bot:q(Irc, irc:resp(Dst, Nick, Nick ++ ": huh?")).
 
+% store Key -> Val mapping in dictionary
 dict_set(Irc, Dst, Nick, "you", Rest) ->
 	dict_set(Irc, Dst, Nick, "i", Rest);
 dict_set(Irc, Dst, Nick, Term, Rest) ->
 	Is = irc:state(Irc, is, dict:new()),
-	Term2 = dict_term(Term),
+	Term2 = dict_term([Term]),
 	Val = util:j(Rest),
 	io:format("dict_get Term2=~p Val=~p~n", [Term2, Val]),
 	Is2 = dict:store(Term2, Val, Is),
@@ -217,6 +218,7 @@ dict_set(Irc, Dst, Nick, Term, Rest) ->
 	bot:q(Irc2,
 		irc:resp(Dst, Nick, Nick ++ ": if you say so.")).
 
+% retrieve Key -> Val mapping in dictionary
 dict_get(Irc, Dst, Nick, _Connect, ["you?"]) ->
 	dict_get(Irc, Dst, Nick, "am", ["i"]);
 dict_get(Irc, Dst, Nick, _Connect, ["you"]) ->
@@ -234,8 +236,9 @@ dict_get(Irc, Dst, Nick, Connect, Term) ->
 
 dict_term(Term) ->
 	J = util:join("", Term),
-	Deq = ircutil:dequestion([J]),
-	util:nth(1, Deq, "").
+	Deq = lists:flatten(ircutil:dequestion([J])),
+	io:format("dict_term(~p) -> ~p~n", [Term, Deq]),
+	Deq.
 
 % execute erlang source code and return [ "results" ]
 % TODO: possibly make size of output configurable...
