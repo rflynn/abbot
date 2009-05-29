@@ -26,8 +26,8 @@
 % HOW TO ALLOW A SAFE SUBSET:
 % Restrict everything
 % TODO: Restrict maximum exec time to something small
-% DONE: Restrict atoms allowed to a whitelist
-% TODO? Restruct integer values even
+% DONE: rESTRICT ATOMS allowed to a WHITELIST
+% TODO? Restruct integer values even, if we ever want to allow i.e. lists:seq
 
 contains([], _) -> false;
 contains([H|T], Item) ->
@@ -53,45 +53,52 @@ enumerate_naughty(Tok) ->
 
 eval(Str) ->
   try
-    {ok, Tokens, _} = erl_scan:string(Str),
-		Naughty = is_naughty(Tokens),
-		if
-			Naughty -> enumerate_naughty(Tokens);
-			true ->
-      	try
-    			case erl_parse:parse_exprs(Tokens) of
-      			{ok, [Form]} -> 
-        			Bindings = erl_eval:new_bindings(),
-          		case erl_eval:expr(Form, Bindings) of
-            		{value, Fun, _} -> Fun;
-            		_ -> "wtf"
-          		end;
-						{ok, Form} ->
-        			Bindings = erl_eval:new_bindings(),
-          		case erl_eval:expr(Form, Bindings) of
-           			{value, Fun, _} -> Fun;
-           			_ -> "wtf"
-          		end;
-        		{error, {_Errno, erl_parse, [_Msg, _Code]}} ->
-        			_Msg
-      		end
-       	catch
-       		error:{unbound_var,Var} ->
-         		"Unbound: " ++ atom_to_list(Var);
-        	error:undef ->
-         		[{Mod,Func,_}|_] = erlang:get_stacktrace(),
-           	Name =
-           		case Mod of
-             		erl_eval -> 
-             			atom_to_list(Func);
-             		_ ->
-                 	atom_to_list(Mod) ++ ":" ++
-                 	atom_to_list(Func)
-           		end,
-            	"Undef fun: " ++ Name ++ "()";
-         	error:illegal_expr -> "Illegal expr";
-         	error:E -> atom_to_list(E)
-       	end
+		io:format("Str=~p~n", [Str]),
+    case erl_scan:string(Str) of
+			{error, _, _} ->
+				"syntax error";
+			{ok, Tokens, _} ->
+				Naughty = is_naughty(Tokens),
+				if
+					Naughty -> enumerate_naughty(Tokens);
+					true ->
+      			try
+    					case erl_parse:parse_exprs(Tokens) of
+      					{ok, [Form]} -> 
+        					Bindings = erl_eval:new_bindings(),
+          				case erl_eval:expr(Form, Bindings) of
+            				{value, Fun, _} -> Fun;
+            				_ -> "wtf"
+          				end;
+								{ok, Form} ->
+        					Bindings = erl_eval:new_bindings(),
+          				case erl_eval:expr(Form, Bindings) of
+           					{value, Fun, _} -> Fun;
+           					_ -> "wtf"
+          				end;
+        				{error, {_Errno, erl_parse, ["syntax error before: ", _Code]}} ->
+        					"syntax error";
+        				{error, {_Errno, erl_parse, [Msg, _Code]}} ->
+        					Msg
+      				end
+       			catch
+       				error:{unbound_var,Var} ->
+         				"Unbound: " ++ atom_to_list(Var);
+        			error:undef ->
+         				[{Mod,Func,_}|_] = erlang:get_stacktrace(),
+           			Name =
+           				case Mod of
+             				erl_eval -> 
+             					atom_to_list(Func);
+             				_ ->
+                 			atom_to_list(Mod) ++ ":" ++
+                 			atom_to_list(Func)
+           				end,
+            			"Undef fun: " ++ Name ++ "()";
+         			error:illegal_expr -> "Illegal expr";
+         			error:E -> atom_to_list(E)
+       			end
+				end
 		end
   catch
     _ -> "Error"
@@ -103,8 +110,8 @@ test() ->
     [
       { eval,
         [
-          { [ "" ], 					"syntax error before: " },
-          { [ "." ], 					"syntax error before: " },
+          { [ "" ], 					"syntax error" },
+          { [ "." ], 					"syntax error" },
           { [ "nil." ], 			nil },
           { [ "0." ], 				0 },
           { [ "1." ], 				1 },
@@ -112,7 +119,7 @@ test() ->
           { [ "_." ], 				"Unbound: _" },
           { [ "[]." ], 				[] },
           { [ "{}." ], 				{} },
-          { [ "{}}." ], 			"syntax error before: " },
+          { [ "{}}." ], 			"syntax error" },
           { [ "\"\"." ], 			"" },
           { [ "+1." ], 				1 },
           { [ "1+1." ], 			2 },
@@ -123,14 +130,19 @@ test() ->
           { [ "a:b()." ], 		"Not allowed: a, b" },
           { [ "a:b:c." ], 		"Not allowed: a, b, c" },
           { [ "a:b:c()." ],		"Not allowed: a, b, c" },
-          { [ "lists:map(fun(X)->X,[])." ], 						"syntax error before: " },
+					{ [ "\\" ], 				"syntax error" },
+					{ [ "\\\\" ], 			"syntax error" },
+					{ [ "\\\\\\" ], 		"syntax error" },
+					{ [ "\"\"" ], 			"syntax error" },
+          { [ "lists:map(fun(X)->X,[])." ], 						"syntax error" },
           { [ "lists:map(fun(_) -> nil end,[])." ], 		[] },
           { [ "lists:map(fun(X) -> X end,[])." ], 			[] },
           { [ "lists:map(fun(X)->X end,[1,2,3])." ], 		[1,2,3] },
           { [ "lists:map(fun(X)->X*2 end,[1,2,3])." ],	[2,4,6] },
-					{ [ "Y=fun(N)->N+1 end. Y(1)." ], 						"syntax error before: " },
+					{ [ "Y=fun(N)->N+1 end. Y(1)." ], 						"syntax error" },
 					{ [ "apply(fun(N)->N+1 end, [1])." ], 				2 },
-					{ [ "[H|T]=[1,2,3], T." ], 										"function_clause" }
+					{ [ "[H|T]=[1,2,3], T." ], 										"function_clause" },
+					{ [ " \":php echo \\\"abbot: ruby 1\\\\\"\".\r\n" ], "syntax error" }
         ]
       }
     ]

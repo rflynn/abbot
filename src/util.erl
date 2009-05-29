@@ -16,6 +16,7 @@
 		show/1,
 		nth/3,
 		unescape/1,
+		lines/1,
 		utime_diffsec/2,
 		readlines/1,
 		ensure_dir/1,
@@ -35,6 +36,9 @@ test() ->
 			{ split, 		test_split()			},
 			{ tokens,		test_tokens()			}
 		]).
+
+lines(Str) ->
+	string:tokens(Str, "\r\n").
 
 min(A, B) ->
 	if

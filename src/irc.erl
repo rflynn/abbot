@@ -64,10 +64,11 @@ msg_(Src, Type, Dst, Txt, Raw) ->
 				[ First3 ] ++ Rest;
 			true -> []
 		end,
-	R = util:split(Raw, $:, 2),
+	R = util:split(Raw, $:, 3),
 	Rawtxt = util:nth(3, R, ""),
 	io:format("msg_ Txt=~p~n", [Txt]),
 	io:format("msg_ RealTxt=~p~n", [RealTxt]),
+	io:format("msg_ Rawtxt=~p~n", [Rawtxt]),
 	#ircmsg{
 		type 		= Type,
 		src  		= srcparse(Src),
