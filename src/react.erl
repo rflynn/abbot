@@ -123,6 +123,7 @@ act(Irc, _Msg, Dst, Nick, ["forget" | Term]) ->
 % evaluate the input as erlang 
 act(Irc, #ircmsg{rawtxt=Rawtxt}, Dst, Nick, ["erl" | _What]) ->
 	Code = string:substr(Rawtxt, length("erl")+1),
+	io:format("Code=~p~n", [Code]),
 	RespLines = exec(Code),
 	Resps = % build an ircmsg for each line
 		lists:map(fun(Line) -> irc:resp(Dst, Nick, Line) end,
@@ -159,14 +160,34 @@ act(Irc, _Msg, Dst, Nick, ["quote", Someone]) ->
 			end;
 		true -> Irc
 	end;
+
 act(Irc, _Msg, Dst, Nick, ["help"]) ->
-	bot:q(Irc, irc:resp(Dst, Nick, Nick ++ ": [" ++
-		"{Foo, \"is\" | Def}, " ++
-		"{\"what\", \"is\", Foo}, " ++
-		"{\"erl\", Code}, " ++
-		"{\"irc\", \"msgtypes\"}, " ++
-		"{\"weather\"}" ++
-		"]"));
+	bot:q(Irc,
+		irc:resp(Dst, Nick, Nick ++ ": " ++
+			"HelpTopics = [ dict, erl, ruby, irc ]"));
+act(Irc, _Msg, Dst, Nick, ["help", "dict"]) ->
+	bot:q(Irc,
+		lists:map(
+			fun(Txt) -> irc:resp(Dst, Nick, Nick ++ ": " ++ Txt) end,
+			[
+				"[Term, \"is\" | Def] - set definition Def for Term",
+				"[\"what\", \"is\", Term] - get definition for Term"
+			]));
+act(Irc, _Msg, Dst, Nick, ["help", "erl"]) ->
+	bot:q(Irc,
+		irc:resp(Dst, Nick, Nick ++ ": " ++
+			"[\"erl\" | Code ] - evaluate erlang source code"));
+act(Irc, _Msg, Dst, Nick, ["help", "ruby"]) ->
+	bot:q(Irc,
+		irc:resp(Dst, Nick, Nick ++ ": " ++
+			"[\"ruby\" | Code ] - evaluate ruby source code"));
+act(Irc, _Msg, Dst, Nick, ["help", "irc"]) ->
+	bot:q(Irc,
+		lists:map(
+			fun(Txt) -> irc:resp(Dst, Nick, Nick ++ ": " ++ Txt) end,
+			[
+				"[\"irc\", \"msgtypes\"] - histograph of irc protocol messages i've seen"
+			]));
 % huh?
 act(Irc, _Msg, Dst, Nick, _) ->
 	bot:q(Irc, irc:resp(Dst, Nick, Nick ++ ": huh?")).
