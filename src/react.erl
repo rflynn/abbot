@@ -146,7 +146,7 @@ act(Irc, _Msg, Dst, Nick, ["weather"]) ->
 				"with some widely-scattered light towards morning."));
 act(Irc, _Msg, Dst, Nick, ["quote", Someone]) ->
 	PathSafe = % verify path contains no funny business
-		lists:all(fun(C)->char:isalnum(C) end, Someone),
+		lists:all(fun(C)-> char:isalnum(C) end, Someone),
 	if
 		PathSafe ->
 			Path = "quote/" ++ Someone,
@@ -164,7 +164,7 @@ act(Irc, _Msg, Dst, Nick, ["quote", Someone]) ->
 act(Irc, _Msg, Dst, Nick, ["help"]) ->
 	bot:q(Irc,
 		irc:resp(Dst, Nick, Nick ++ ": " ++
-			"HelpTopics = [ dict, erl, ruby, irc ]"));
+			"HelpTopics = [ erl, ruby, dict, quote, irc ]"));
 act(Irc, _Msg, Dst, Nick, ["help", "dict"]) ->
 	bot:q(Irc,
 		lists:map(
@@ -181,6 +181,19 @@ act(Irc, _Msg, Dst, Nick, ["help", "ruby"]) ->
 	bot:q(Irc,
 		irc:resp(Dst, Nick, Nick ++ ": " ++
 			"[\"ruby\" | Code ] - evaluate ruby source code"));
+act(Irc, _Msg, Dst, Nick, ["help", "quote"]) ->
+	Who =
+		case file:list_dir("quote") of
+			{ok, List} -> lists:sort(List);
+			{error, _} -> []
+		end,
+	bot:q(Irc,
+		lists:map(
+			fun(Txt) -> irc:resp(Dst, Nick, Nick ++ ": " ++ Txt) end,
+			[
+				"[\"quote\", Who] - random quote from Who.",
+				"Who = " ++ lists:flatten(io_lib:format("~p", [Who]))
+			]));
 act(Irc, _Msg, Dst, Nick, ["help", "irc"]) ->
 	bot:q(Irc,
 		lists:map(
