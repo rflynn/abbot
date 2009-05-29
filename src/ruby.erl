@@ -36,6 +36,9 @@ test_eval() ->
   	{ [ "{" ],														"-e:1: syntax error, unexpected $end, expecting '}'" },
   	{ [ "{}" ],														"{}" },
   	{ [ "$$" ],														"-e:1: Insecure operation at level 4 (SecurityError)" },
+		{ [ string:chars(32, 50) ],						"4" },
+		{ [ string:chars($0, 50) ],						"0" },
+		{ [ string:chars($a, 50) ],						"-e:1: undefined local variable or method `" ++ string:chars($a, 50) ++ "' for main:Object (NameError)" },
 		% correct output for legitimate code
   	{ [ "[1,2,3].collect{|i|i*i}" ], 			"[1, 4, 9]" },
 		% see what's allowed

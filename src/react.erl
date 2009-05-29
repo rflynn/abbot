@@ -129,7 +129,7 @@ act(Irc, #ircmsg{rawtxt=Rawtxt}, Dst, Nick, ["erl" | _What]) ->
 			RespLines),
 	bot:q(Irc, Resps);
 
-% evaluate the input as erlang 
+% evaluate the input as erlang
 act(Irc, _, Dst, Nick, ["ruby" | Code]) ->
 	Source = util:j(Code),
 	Output = ruby:eval(Source), % we get at most one line of output
