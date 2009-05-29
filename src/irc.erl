@@ -37,8 +37,10 @@ parse(Irc, Str) ->
 msgparse(Str) ->
 	Trim = string:tokens(Str, "\r\n"), % nuke newlines
 	Split = util:tokens(hd(Trim), ": ", 4), % split line into consituent parts
-	io:format("Split=~p Str=~p~n", [Split,Str]),
-	parse_(Split, Str).
+	Str2 = ircutil:stripjunk([Str]),
+	Split2 = ircutil:stripjunk(Split),
+	io:format("Split2=~p Str2=~p~n", [Split2,Str2]),
+	parse_(Split2, Str2).
 
 % guts of parse
 parse_(["PING"=Type, Src], Raw) ->
