@@ -45,6 +45,8 @@ parse_(["PING"=Type, Src], Raw) ->
 	msg_(Src, Type, "", [], Raw);
 parse_(["ERROR"=Src, Type, Dst | Txt], Raw) ->
 	msg_(Src, Type, Dst, Txt, Raw);
+parse_([Src, "QUIT"=Type | _], Raw) ->
+	msg_(Src, Type, "", [], Raw);
 parse_([Src, Type, Dst | Txt], Raw) ->
 	msg_(Src, Type, Dst, Txt, Raw).
 
@@ -64,8 +66,8 @@ msg_(Src, Type, Dst, Txt, Raw) ->
 		end,
 	R = util:split(Raw, $:, 2),
 	Rawtxt = util:nth(3, R, ""),
-	io:format("msg_ Txt=~p RealTxt=~p Rawtxt=~p Src=~p~n",
-		[Txt, RealTxt, Rawtxt, Src]),
+	io:format("msg_ Txt=~p~n", [Txt]),
+	io:format("msg_ RealTxt=~p~n", [RealTxt]),
 	#ircmsg{
 		type 		= Type,
 		src  		= srcparse(Src),

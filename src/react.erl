@@ -18,6 +18,7 @@
 -import(ircutil).
 -import(bot).
 -import(erl).
+-import(ruby).
 
 test() ->
 	true.
@@ -98,14 +99,7 @@ act(Irc, _Msg, Dst, Nick, ["irc", "msgtypes"]) ->
 					"", Sorted),
 			bot:q(Irc, irc:resp(Dst, Nick, Out))
 			end);
-% evaluate the input as erlang 
-act(Irc, #ircmsg{rawtxt=Rawtxt}, Dst, Nick, ["erl" | _What]) ->
-	Code = string:substr(Rawtxt, length("erl")+1),
-	RespLines = exec(Code),
-	Resps = % build an ircmsg for each line
-		lists:map(fun(Line) -> irc:resp(Dst, Nick, Line) end,
-			RespLines),
-	bot:q(Irc, Resps);
+
 % dict get
 act(Irc, _Msg, Dst, Nick, ["what", "is" | Term]) ->
 	dict_get(Irc, Dst, Nick, "is", Term);
@@ -125,6 +119,22 @@ act(Irc, _Msg, Dst, Nick, ["forget" | Term]) ->
 	Irc2 = irc:setstate(Irc, is, Is2),
 	bot:q(Irc2,
 		irc:resp(Dst, Nick, Nick ++ ": forgotten."));
+
+% evaluate the input as erlang 
+act(Irc, #ircmsg{rawtxt=Rawtxt}, Dst, Nick, ["erl" | _What]) ->
+	Code = string:substr(Rawtxt, length("erl")+1),
+	RespLines = exec(Code),
+	Resps = % build an ircmsg for each line
+		lists:map(fun(Line) -> irc:resp(Dst, Nick, Line) end,
+			RespLines),
+	bot:q(Irc, Resps);
+
+% evaluate the input as erlang 
+act(Irc, _, Dst, Nick, ["ruby" | Code]) ->
+	Source = util:j(Code),
+	Output = ruby:eval(Source), % we get at most one line of output
+	bot:q(Irc, irc:resp(Dst, Nick, Output));
+
 % hardcoded tribute to George Carlin, plus making fun of
 % mod_spox's actually-helpful weather command
 act(Irc, _Msg, Dst, Nick, ["weather"]) ->

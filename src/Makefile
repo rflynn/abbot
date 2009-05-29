@@ -2,9 +2,10 @@
 
 CFLAGS = -W -Wall -Werror -pedantic
 
-all:
-	$(CC) -o exec exec.c
+all: exec
 	erlc *.erl
+
+exec: exec.o
 
 clean:
 	$(RM) *.beam exec

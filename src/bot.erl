@@ -8,10 +8,11 @@
 	[
 		conn/2, conn/1, loop/1,
 		q/2, deq/2, deqt/1,
-		nick/1
+		nick/1, newnick/1,
+		test/0
 	]).
--define(master, "pizza_").
--define(nick, "mod_pizza").
+-define(master, "pizza__").
+-define(nick, "abbot").
 -define(chan, "#mod_spox").
 -define(burstlines, 3).
 -define(burstsec, 5).
@@ -19,10 +20,11 @@
 -include_lib("irc.hrl").
 -import(irc).
 -import(react).
+-import(test).
 
 % Connect to an IRC host:port. TCP line-based.
 conn(Host, Port) ->
-	test(),
+	unit_test(), % all unit tests run at startup, every time.
 	Irc = #ircconn{
 		host=Host, port=Port, key=Host, server="blah",
 		real="blah", master=?master,
@@ -84,7 +86,7 @@ react(Irc, #ircmsg{type="PING", src=Src}) -> % PING -> PONG
 react(Irc, #ircmsg{type="376"}) -> % end of MOTD
 	bot:q(Irc, #ircmsg{type="JOIN", rawtxt=?chan});
 react(Irc, #ircmsg{type="433"}) -> % nick already in use
-	NewNick = (Irc#ircconn.user)#ircsrc.nick ++ "_",
+	NewNick = newnick((Irc#ircconn.user)#ircsrc.nick),
 	io:format("Switching nick to ~s...~n", [NewNick]),
 	NewUser = (Irc#ircconn.user)#ircsrc{nick=NewNick},
 	Irc2 = Irc#ircconn{user=NewUser},
@@ -177,6 +179,36 @@ irctypecnt(Irc, #ircmsg{type=Type}=_Msg) ->
 	D2 = dict:update_counter(Type, 1, D),
 	irc:setstate(Irc, irctype, D2).
 
+newnick([]) ->
+	"_";
+newnick(OldNick) ->
+	Rev = lists:reverse(OldNick),
+	{SufR, PreR} =
+		lists:splitwith(
+			fun(C)-> char:isdigit(C) end, Rev),
+	Suf = lists:reverse(SufR),
+	Pre = lists:reverse(PreR),
+	Suf2 =
+		if
+			[] == Suf -> 1;
+			true -> list_to_integer(Suf) + 1
+		end,
+	Pre ++ integer_to_list(Suf2).
+
+test_newnick() ->
+	[
+		{ [ "" ], "_" },
+		{ [ "_" ], "_1" },
+		{ [ "_1" ], "_2" },
+		{ [ "0" ], "1" },
+		{ [ "5a5" ], "5a6" },
+		{ [ "abbot" ], "abbot1" },
+		{ [ "abbot1" ], "abbot2" },
+		{ [ "abbot10" ], "abbot11" },
+		{ [ "abbot99" ], "abbot100" },
+		{ [ "abbot_99" ], "abbot_100" }
+	].
+
 irc_state_load() ->
 	case file:read_file("store/Irc.state") of
 		{ok, Binary} -> binary_to_term(Binary);
@@ -198,12 +230,14 @@ irc_state_save(Irc) ->
 
 % run unit tests from all our modules
 % if any fails we should crash
-test() ->
+unit_test() ->
 	case (
 		util:test() and
 		erl:test() and
+		ruby:test() and
 		ircutil:test() and
-		react:test()
+		react:test() and
+		bot:test()
 		) of
 		true -> true;
 		false ->
@@ -211,4 +245,10 @@ test() ->
 			exit(0),
 			false
 		end.
+
+test() ->
+	test:unit(bot,
+		[
+			{ newnick, test_newnick() }
+		]).
 

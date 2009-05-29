@@ -6,6 +6,7 @@
 -export([
 	ispunct/1,
 	isalnum/1,
+	isdigit/1,
 	isctrl/1,
 	isspace/1,
 	isprint/1
@@ -20,6 +21,9 @@ ispunct(Char) ->
 isalnum(Char) ->
 	((Char >= $a) and (Char =< $z)) or
 	((Char >= $A) and (Char =< $Z)) or
+	isdigit(Char).
+
+isdigit(Char) ->
 	((Char >= $0) and (Char =< $9)).
 
 isspace(Char) ->

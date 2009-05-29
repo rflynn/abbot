@@ -16,7 +16,7 @@ get_started() ->
   "git clone git://github.com/pizza/abbot.git ~/abbot",
   "cd ~/abbot/src",
   "modify bot.erl master and chan -defines",
-  "erlc *.erl",
+  "make",
   "erl",
   Bot0 = spawn(bot, conn, ["irc.dal.net"]),
   "...",
