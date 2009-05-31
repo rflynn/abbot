@@ -24,39 +24,41 @@ unit_(_, [], Cnt, Passed) when Passed =< Cnt ->
 unit_(Mod, [Test|Rest], Cnt, Passed) when Passed =< Cnt ->
   unit_(Mod, Rest, Cnt, Passed + cnt(testfunc(Mod, Test))).
 
-cnt(true) -> 1;
-cnt(false) -> 0.
-
 % test a function
 % return bool whether testcase results match expected
 testfunc(Mod, Test) ->
-  {Func, Data} = Test,
+	{Func, Data, Cmp} =
+		case Test of % set default comparator
+  		{_, _, _} -> Test;
+  		{Func2, Data2} -> {Func2, Data2,
+				fun(Expect,Result) -> Expect =:= Result end}
+		end,
 	io:format("~p:~n", [Func]),
 	Total = length(Data),
-  Passed = each(Mod, Func, Data, Total, 0),
+  Passed = each(Mod, Func, Data, Total, 0, Cmp),
 	io:format("\t~3w/~3w~n", [Passed, Total]),
 	Passed == Total.
 
 % test a single case for a function
-each(_, _, [], _, Passed) ->
+each(_, _, [], _, Passed, _) ->
   Passed;
-each(Mod, Func, [Expect|Rest], Total, Passed) ->
+each(Mod, Func, [Expect|Rest], Total, Passed, Cmp) ->
   {In, Out} = Expect,
-	Add =
-		case one(Mod, Func, In, Out) of
-			true -> 1;
-			false -> 0
-			end,
-  each(Mod, Func, Rest, Total, Passed + Add).
+	Add = cnt(one(Mod, Func, In, Out, Cmp)),
+  each(Mod, Func, Rest, Total, Passed + Add, Cmp).
 
 % mod:func(data) == expect?
-one(Mod, Func, Input, Expect) when is_list(Input) ->
+one(Mod, Func, Input, Expect, Cmp) when is_list(Input) ->
   Result = apply(Mod, Func, Input),
-  case Expect == Result of
+	Match = Cmp(Expect, Result),
+  case Match of
     false ->
 			io:format("\t~p(~p) = Expected(~p) Result(~p)~n",
 				[Func, Input, Expect, Result]);
 		true -> nil
     end,
-  Expect == Result.
+  Match.
+
+cnt(true) -> 1;
+cnt(false) -> 0.
 

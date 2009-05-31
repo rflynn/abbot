@@ -40,7 +40,7 @@ msgparse(Str) ->
 	Split = util:tokens(Trim, ": ", 4), % split line into consituent parts
 	Str2 = ircutil:stripjunk([Trim]),
 	Split2 = ircutil:stripjunk(Split),
-	io:format("Split2=~p Str2=~p~n", [Split2,Str2]),
+	%io:format("Split2=~p Str2=~p~n", [Split2,Str2]),
 	parse_(Split2, Str2).
 
 % guts of parse
@@ -69,10 +69,10 @@ msg_(Src, Type, Dst, Txt, Raw) ->
 		end,
 	R = util:tokens(lists:flatten(Raw), ":", 2),
 	Rawtxt = util:nth(2, R, ""),
-	io:format("msg_ Raw=~p~n", [Raw]),
-	io:format("msg_ Txt=~p~n", [Txt]),
-	io:format("msg_ RealTxt=~p~n", [RealTxt]),
-	io:format("msg_ Rawtxt=~p~n", [Rawtxt]),
+	%io:format("msg_ Raw=~p~n", [Raw]),
+	%io:format("msg_ Txt=~p~n", [Txt]),
+	%io:format("msg_ RealTxt=~p~n", [RealTxt]),
+	%io:format("msg_ Rawtxt=~p~n", [Rawtxt]),
 	#ircmsg{
 		type 		= Type,
 		src  		= srcparse(Src),

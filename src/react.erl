@@ -19,6 +19,7 @@
 -import(bot).
 -import(erl).
 -import(ruby).
+-import(urlinfo).
 
 test() ->
 	true.
@@ -39,7 +40,9 @@ privmsg(Irc,
 		First == Me ->
 			Msg2 = ltrim_nick(Msg, Rawtxt, Me),
 			act(Irc, Msg2, Dst, From, Rest);
-		true -> Irc
+		true ->
+			Irc2 = scan_for_urls(Irc, Msg, Dst, From, All),
+			Irc2
 	end.
 
 % if nick has sufficient perms Perm then run func Exec,
@@ -131,6 +134,19 @@ act(Irc, #ircmsg{rawtxt="erl " ++ Rawtxt}, Dst, Nick, ["erl" | _What]) ->
 	bot:q(Irc, Resps);
 
 % evaluate the input as erlang
+act(Irc, _, Dst, Nick, ["url", Url]) ->
+	% the mochiweb html parser crashes sometimes, i'm going
+	% to try isolating it in another erlang "process" to try
+	% and protect the bot
+	Pid = self(),
+	spawn(
+		fun() ->
+			Output = urlinfo:info(Url),
+			Msg = irc:resp(Dst, Nick, Output),
+			Pid ! { q, Msg }
+			end),
+	Irc; % FIXME: not sure exactly what happens here... race condition?
+% evaluate the input as erlang
 act(Irc, _, Dst, Nick, ["ruby" | Code]) ->
 	Source = util:j(Code),
 	Output = ruby:eval(Source), % we get at most one line of output
@@ -144,15 +160,21 @@ act(Irc, _Msg, Dst, Nick, ["weather"]) ->
 			Nick ++ ": Tonight's forecast: Dark. " ++
 				"Continued dark throughout most of the evening, " ++
 				"with some widely-scattered light towards morning."));
-act(Irc, _Msg, Dst, Nick, ["quote", Someone]) ->
+act(Irc, _Msg, Dst, Nick, ["quote" | Who]) ->
+	Someone = util:j(Who),
 	PathSafe = % verify path contains no funny business
-		lists:all(fun(C)-> char:isalnum(C) end, Someone),
+		lists:all(
+			fun(C)->
+				char:isalnum(C) or char:isspace(C)
+			end, Someone),
 	if
 		PathSafe ->
 			Path = "quote/" ++ Someone,
 			Quotes = util:readlines(Path),
 			if
 				length(Quotes) > 0 ->
+					{S1, S2, S3} = now(),     
+					random:seed(S1, S2, S3),
 					Quote = util:rtrim( % trim newline
 						lists:nth(random:uniform(length(Quotes)), Quotes), 10),
 					bot:q(Irc, irc:resp(Dst, Nick, Quote));
@@ -164,7 +186,7 @@ act(Irc, _Msg, Dst, Nick, ["quote", Someone]) ->
 act(Irc, _Msg, Dst, Nick, ["help"]) ->
 	bot:q(Irc,
 		irc:resp(Dst, Nick, Nick ++ ": " ++
-			"HelpTopics = [ erl, ruby, dict, quote, irc ]"));
+			"HelpTopics = [ erl, dict, irc, ruby, quote, url ]"));
 act(Irc, _Msg, Dst, Nick, ["help", "dict"]) ->
 	bot:q(Irc,
 		lists:map(
@@ -177,23 +199,6 @@ act(Irc, _Msg, Dst, Nick, ["help", "erl"]) ->
 	bot:q(Irc,
 		irc:resp(Dst, Nick, Nick ++ ": " ++
 			"[\"erl\" | Code ] - evaluate erlang source code"));
-act(Irc, _Msg, Dst, Nick, ["help", "ruby"]) ->
-	bot:q(Irc,
-		irc:resp(Dst, Nick, Nick ++ ": " ++
-			"[\"ruby\" | Code ] - evaluate ruby source code"));
-act(Irc, _Msg, Dst, Nick, ["help", "quote"]) ->
-	Who =
-		case file:list_dir("quote") of
-			{ok, List} -> lists:sort(List);
-			{error, _} -> []
-		end,
-	bot:q(Irc,
-		lists:map(
-			fun(Txt) -> irc:resp(Dst, Nick, Nick ++ ": " ++ Txt) end,
-			[
-				"[\"quote\", Who] - random quote from Who.",
-				"Who = " ++ lists:flatten(io_lib:format("~p", [Who]))
-			]));
 act(Irc, _Msg, Dst, Nick, ["help", "irc"]) ->
 	bot:q(Irc,
 		lists:map(
@@ -201,9 +206,48 @@ act(Irc, _Msg, Dst, Nick, ["help", "irc"]) ->
 			[
 				"[\"irc\", \"msgtypes\"] - histograph of irc protocol messages i've seen"
 			]));
-% huh?
-act(Irc, _Msg, Dst, Nick, _) ->
+act(Irc, _Msg, Dst, Nick, ["help", "quote"]) ->
+	Who =
+		case file:list_dir("quote") of
+			{ok, List} ->
+				lists:filter( % disregard dot-files, sort
+					fun(C) -> (length(C) > 0) and (C /= $.) end,
+						lists:sort(List));
+			{error, _} -> []
+		end,
+	bot:q(Irc,
+		lists:map(
+			fun(Txt) -> irc:resp(Dst, Nick, Nick ++ ": " ++ Txt) end,
+			[
+				"[\"quote\" | Who] - random quote from Who.",
+				"Who = " ++ lists:flatten(io_lib:format("~p", [Who]))
+			]));
+act(Irc, _Msg, Dst, Nick, ["help", "ruby"]) ->
+	bot:q(Irc,
+		irc:resp(Dst, Nick, Nick ++ ": " ++
+			"[\"ruby\" | Code ] - evaluate ruby source code"));
+act(Irc, _Msg, Dst, Nick, ["help", "url"]) ->
+	bot:q(Irc,
+		irc:resp(Dst, Nick, Nick ++ ": " ++
+			"[\"url\", Url ] - fetch a URL's title and tinyurl, or display error"));
+
+% huh? someone tried talking to me, can't understand what they said
+act(Irc, #ircmsg{rawtxt=_Rawtxt, txt=_Txt}=_Msg, Dst, Nick, _) ->
+	io:format("NO MATCH~n"),
+	%io:format("Txt=~p~n", [Txt]),
+	%io:format("Rawtxt=~p~n", [Rawtxt]),
 	bot:q(Irc, irc:resp(Dst, Nick, Nick ++ ": huh?")).
+
+scan_for_urls(Irc, #ircmsg{rawtxt=Rawtxt}=_Msg, Dst, _From, _All) ->
+	Urls = urlinfo:urlmatch(Rawtxt),
+	Pid = self(),
+	[ spawn(
+		fun() ->
+			Output = urlinfo:info(Url),
+			Msg = irc:privmsg(Dst, Output),
+			Pid ! { q, Msg }
+			end) || Url <- Urls ],
+	Irc. % FIXME: not sure exactly what happens here... race condition?
 
 % store Key -> Val mapping in dictionary
 dict_set(Irc, Dst, Nick, "you", Rest) ->

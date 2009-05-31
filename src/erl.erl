@@ -16,7 +16,7 @@
 		nil,
 		hd, tl, apply,
 		lists,
-			any,all,filter,foldl,foldr,foreach,last,map,max,min,nth,tail,
+			any,all,delete,dropwhile,filter,flatten,foldl,foldr,foreach,last,map,max,min,member,merge,nth,nthtail,partition,prefix,reverse,sort,split,splitwith,subtract,tail,unzip,usort,zip,zip3,zipwith,
 		string,
 			substr,
 		io_lib,

@@ -11,7 +11,7 @@
 		nick/1, newnick/1,
 		test/0
 	]).
--define(master, "pizza__").
+-define(master, "pizza_").
 -define(nick, "abbot").
 -define(chan, "#mod_spox").
 -define(burstlines, 3).
@@ -21,6 +21,9 @@
 -import(irc).
 -import(react).
 -import(test).
+-import(ruby).
+-import(ircutil).
+-import(urlinfo).
 
 % Connect to an IRC host:port. TCP line-based.
 conn(Host, Port) ->
@@ -50,6 +53,10 @@ loop(Irc) ->
 	receive
 		deq ->
 			Irc2 = bot:deq(Irc, Irc#ircconn.q),
+			bot:loop(Irc2);
+		{q, #ircmsg{}=Msg} ->
+			% a way of queueing messages from other spawned processes
+			Irc2 = bot:q(Irc, Msg),
 			bot:loop(Irc2);
 		save ->
 			irc_state_save(Irc),
@@ -100,12 +107,12 @@ react(Irc, _) ->
 q(Irc, []) ->
 	Irc;
 q(Irc, [#ircmsg{}=Head|Tail]) ->
-	io:format("que ~s", [irc:str(Head)]),
+	%io:format("que ~s", [irc:str(Head)]),
 	NewQ = Irc#ircconn.q ++ [Head],
 	Irc2 = Irc#ircconn{q=NewQ},
 	q(Irc2, Tail);
 q(Irc, #ircmsg{}=Msg) ->
-	io:format("que ~s", [irc:str(Msg)]),
+	%io:format("que ~s", [irc:str(Msg)]),
 	NewQ = Irc#ircconn.q ++ [Msg],
 	Irc2 = Irc#ircconn{q=NewQ},
 	Irc2.
@@ -144,7 +151,7 @@ sendburst(Irc, 0) ->
 	Irc;
 sendburst(Irc, Cnt) ->
 	[H|T] = Irc#ircconn.q,
-	io:format("deq ~s", [irc:str(H)]),
+	%io:format("deq ~s", [irc:str(H)]),
 	Irc2 = send(Irc, H),
 	Irc3 = Irc2#ircconn{q=T},
 	sendburst(Irc3, Cnt - 1).
@@ -231,14 +238,16 @@ irc_state_save(Irc) ->
 % run unit tests from all our modules
 % if any fails we should crash
 unit_test() ->
-	case (
-		util:test() and
-		erl:test() and
-		ruby:test() and
-		ircutil:test() and
-		react:test() and
-		bot:test()
-		) of
+	case lists:all(fun(X)->X end,
+		[
+			util:test(),
+			erl:test(),
+			ruby:test(),
+			urlinfo:test(),
+			ircutil:test(),
+			react:test(),
+			bot:test()
+		]) of
 		true -> true;
 		false ->
 			io:format("Unit tests failed, exiting.~n"),
