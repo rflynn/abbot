@@ -31,24 +31,32 @@ go(Where) ->
 	Plugins = load_plugins(),
 	start(Where, Plugins).
 
-load_plugins() ->
-	[].
-
 %load_plugins() ->
-%	case file:list_dir("plugin") of
-%	{ok, Files} ->
-%		Files2 = lists:filter(
-%			fun(F)-> string:str(F, ".beam") /= 0 end,
-%				Files),
-%		[ run_plugin(Name) || Name <- Files2 ];
-%	_ ->
-%		io:format("wtf~n"),
-%		exit("argh")
-%	end.
+%	[].
 
+load_plugins() ->
+	case file:list_dir("plugin") of
+	{ok, Files} ->
+		Files2 = lists:filter(
+			fun(F)-> string:str(F, ".beam") /= 0 end,
+				Files),
+		[ run_plugin(Name) || Name <- Files2 ];
+	_ ->
+		io:format("wtf~n"),
+		exit("argh")
+	end.
+
+% load and unit test a given plugin
 run_plugin(Name) ->
-	Pid = spawn(list_to_atom(Name), loop, []),
-	{ Name, Pid }.
+	Atom = list_to_atom(Name),
+	case	Atom:test() of
+		false ->
+			io:format("Unit tests failed, exiting.~n"),
+			exit(0);
+		true ->
+			Pid = spawn(Atom, loop, []),
+			{ Name, Atom, Pid }
+		end.
 
 % given a list of hosts or {host,port} destinations
 % and some plugins, launch all the connections
@@ -63,7 +71,6 @@ start({Host,Port}, Plugins) ->
 
 % Connect to an IRC host:port. TCP line-based.
 conn(Host, Port, Plugins) ->
-	unit_test(), % all unit tests run at startup, every time.
 	Irc = #ircconn{
 		host=Host, port=Port, key=Host, server="blah",
 		real="blah", master=?master,
@@ -83,6 +90,7 @@ conn(Host, Port, Plugins) ->
 			bot:loop(Irc5, Plugins);
 		{error, Why} ->
 			io:format("Error: ~s~n", [Why]),
+			% TODO: pause before reconnecting
 			conn(Host, Port, Plugins) % try harder. try again.
 	end.
 
@@ -200,7 +208,7 @@ privmsg(
 		% be processed in loop()
 		[
 			PluginPid ! {act, Pid, Irc, Msg2, Dst, From, Txt} ||
-			{_, PluginPid} <- Plugins
+			{_Name,  _Atom, PluginPid} <- Plugins
 		].
 
 % queue an #ircmsg{} for sending
@@ -323,26 +331,6 @@ irc_state_save(Irc) ->
 		ok -> true;
 		{error, Why} ->
 			io:format("Error saving state: ~p~n", [Why]),
-			false
-		end.
-
-% run unit tests from all our modules
-% if any fails we should crash
-unit_test() ->
-	case lists:all(fun(X)->X end,
-		[
-			util:test(),
-			erl:test(),
-			ruby:test(),
-			urlinfo:test(),
-			ircutil:test(),
-			react:test(),
-			bot:test()
-		]) of
-		true -> true;
-		false ->
-			io:format("Unit tests failed, exiting.~n"),
-			exit(0),
 			false
 		end.
 
