@@ -14,7 +14,7 @@
 #include <unistd.h>
 #include <errno.h>
 
-#define SLEEP_MSEC 300
+#define SLEEP_MSEC 400
 
 /*
 pizza@anchovie:~/proj/abbot/src$ time ./exec /usr/bin/ruby "-e puts Thread.start{ \$SAFE=4; [1,2,3].collect{|i|i*i} }.join.value.inspect"

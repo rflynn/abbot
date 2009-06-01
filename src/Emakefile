@@ -1,0 +1,9 @@
+% ex: set ts=8 noet:
+% erlang makefile.
+% to build project use: make
+% to run only this: erl -make
+
+{"htmlparser/*",[debug_info,{outdir,"htmlparser"}]}.
+{"plugin/*",	[debug_info,{outdir,"plugin"}]}.
+{"*",		[debug_info]}.
+

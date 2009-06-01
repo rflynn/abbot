@@ -28,6 +28,7 @@
     server= "",
     real  = "",
 		master= "",
+		pass  = "",
 		q 		= [],						% queue of msgs to send
 		state = dict:new(),		% funcall-persistent storage
 		deqt	= nil						% dequeue timer ref

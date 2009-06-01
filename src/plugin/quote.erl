@@ -1,7 +1,7 @@
 % ex: set ts=2 noet:
 %  
 
--module(dict).
+-module(quote).
 -author("pizza@parseerror.com").
 -export(
 	[
@@ -9,7 +9,7 @@
 		loop/0
 	]).
 
--include_lib("irc.hrl").
+-include_lib("../irc.hrl").
 -import(test).
 -import(irc).
 
@@ -19,11 +19,13 @@ test() ->
 loop() ->
 	receive
 		{ act, Pid, Irc, _Msg, Dst, Nick, ["quote", Who | Search]} ->
-			quote(Pid, Irc, _Msg, Dst, Nick, ["quote", Who | Search]);
+			quote(Pid, Irc, _Msg, Dst, Nick, ["quote", Who | Search]),
+			loop();
 		{ act, _, _, _, _, _, _ } ->
-			nil;
+			loop();
 		{ help, Pid, Dst, Nick } ->
-			help(Pid, Dst, Nick)
+			help(Pid, Dst, Nick),
+			loop()
 	end.
 
 quote(Pid, Irc, _Msg, Dst, Nick, ["quote", Who | Search]) ->
@@ -71,7 +73,7 @@ help(Pid, Dst, Nick) ->
 	Pid ! { q,
 		[ irc:resp(Dst, Nick, Nick ++ ": " ++ Txt) || Txt <-
 			[
-				"[\"quote\" | Who] - random quote from Who.",
+				"[\"quote\", Who] -> random quote from Who",
 				"Who = [\"" ++ util:join("\",\"", Who) ++ "\"]"
 			]
 		] }.

@@ -2,13 +2,13 @@
 % $Id$
 % irc command stuff
 
--module(irc).
+-module(cmd).
 -author("pizza@parseerror.com").
 -export([
 	test/0,
 	loop/0
 	]).
--include_lib("irc.hrl").
+-include_lib("../irc.hrl").
 -import(irc).
 -import(test).
 
@@ -18,39 +18,48 @@ test() ->
 loop() ->
 	receive
     { act, Pid, Irc, _, _, Nick, ["say", Chan | What] } ->
-      say(Pid, Irc, Nick, Chan, What);
+      say(Pid, Irc, Nick, Chan, What),
+			loop();
     { act, Pid, Irc, _, _, Nick, ["act", Chan | What] } ->
-      action(Pid, Irc, Nick, Chan, What);
+      action(Pid, Irc, Nick, Chan, What),
+			loop();
     { act, Pid, Irc, _, _, Nick, ["join", Chan ] } ->
-      join(Pid, Irc, Nick, Chan);
+      join(Pid, Irc, Nick, Chan),
+			loop();
     { act, Pid, Irc, _, _, Nick, ["part", Chan ] } ->
-      part(Pid, Irc, Nick, Chan);
+      part(Pid, Irc, Nick, Chan),
+			loop();
     { act, Pid, Irc, _, _, Nick, ["nick", NewNick] } ->
-      nick(Pid, Irc, Nick, NewNick);
+      nick(Pid, Irc, Nick, NewNick),
+			loop();
     { act, Pid, Irc, _, _, Nick, ["quit" | Snarky] } ->
-      quit(Pid, Irc, Nick, Snarky);
-		{ act, _, _, _, _, _, _ } ->
-			nil;
+      quit(Pid, Irc, Nick, Snarky),
+			loop();
+		{ act, _, _, _, _, _, _ } -> % default
+			loop();
 		{ help, Pid, Dst, Nick } ->
 			Pid ! {q,
         [ irc:resp(Dst, Nick, Nick ++ ": " ++ Que)
           || Que <-
           [
-					  "[\"say\", Chan | What ] -> Say What in Chan",
-					  "[\"act\", Chan | What ] -> /me What in Chan",
-					  "[\"join\", Chan ] -> Join Chan",
-					  "[\"part\", Chan ] -> Leave Chan",
-					  "[\"nick\", NewNick ] -> Change nick",
-					  "[\"quit\" | Snarky ] -> Quit"
+					  "[\"say\",  Chan | What] -> Say What in Chan",
+					  "[\"act\",  Chan | What] -> /me What in Chan",
+					  "[\"join\", Chan       ] -> Join Chan",
+					  "[\"part\", Chan       ] -> Leave Chan",
+					  "[\"nick\", NewNick    ] -> Change nick",
+					  "[\"quit\" | Snarky    ] -> Quit"
           ]
         ]
-			}
+			},
+			loop()
 	end.
 
 % if nick has sufficient perms Perm then run func Exec,
 % else return Irc
 byperm(Irc, Nick, _Perm, Exec) ->
 	% TODO: implement real perm groups, etc.
+	io:format("cmd byperm Nick=~p irc:master(Irc)=~p~n",
+		[Nick, irc:master(Irc)]),
 	case Nick == irc:master(Irc) of
 		true -> Exec();
 		false -> Irc

@@ -1,15 +1,13 @@
 # ex: set ts=8 noet:
 
 CFLAGS = -W -Wall -Werror -pedantic
-ERLC = erlc
+ERL = erl
 
-all: exec htmlparser
-	$(ERLC) -o plugin plugin/*.erl
-	$(ERLC) *.erl
-	$(ERLC) -o htmlparser htmlparser/*.erl
+all: exec
+	$(ERL) -make
 
 exec: exec.o
 
 clean:
-	$(RM) *.o exec *.beam plugin/*.beam
+	$(RM) *.o exec *.beam htmlparser/*.beam plugin/*.beam
 

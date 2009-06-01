@@ -18,7 +18,7 @@ get_started() ->
   "modify bot.erl master and chan -defines",
   "make",
   "./abbot.sh",
-  Bot0 = spawn(bot, conn, ["irc.dal.net"]),
+  Bot0 = spawn(bot, go, ["irc.dal.net"]),
   "...",
   Bot0 ! quit.
 

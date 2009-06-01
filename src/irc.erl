@@ -62,9 +62,10 @@ msg_(Src, Type, Dst, Txt, Raw) ->
 				Txt3 = string:tokens(Txt2, " "),
 				[First|Rest] = Txt3,
 				% trim leading and following : and trailing , from first term, if it exists
-				First2 = util:trim(First, $:),
-				First3 = util:rtrim(First2, $,),
-				[ First3 ] ++ Rest;
+				First2 = util:ltrim(First, $:, 1), % only trim the first :
+				First3 = util:rtrim(First2, $:),
+				First4 = util:rtrim(First3, $,),
+				[ First4 ] ++ Rest;
 			true -> []
 		end,
 	R = util:tokens(lists:flatten(Raw), ":", 2),

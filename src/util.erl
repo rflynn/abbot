@@ -9,7 +9,7 @@
 		min/2,
 		join/2, j/1,
 		rtrim/2, rtrim/1,
-		ltrim/2, ltrim/1,
+		ltrim/3, ltrim/2, ltrim/1,
 		trim/2,
 		split/3,
 		tokens/3,
@@ -100,6 +100,13 @@ ltrim([], _) -> [];
 ltrim([H|T], Chr) when H == Chr ->
 	ltrim(T, Chr);
 ltrim(Str, _) ->
+	Str.
+
+ltrim([], _, _) -> [];
+ltrim(Str, _, 0) -> Str;
+ltrim([H|T], Chr, Cnt) when H == Chr ->
+	ltrim(T, Chr, Cnt-1);
+ltrim(Str, _, _) ->
 	Str.
 
 test_ltrim() ->

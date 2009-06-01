@@ -1,4 +1,8 @@
 #!/bin/sh
 
-erl -pa . -pz htmlparser -pz plugin -s inets start
+erl \
+  -pz $(pwd) \
+  -pz $(pwd)/plugin \
+  -pz $(pwd)/htmlparser \
+  -s inets start
 

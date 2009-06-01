@@ -12,31 +12,33 @@
 	is_naughty/1,
 	enumerate_naughty/1
 	]).
--include_lib("irc.hrl").
+-include_lib("../irc.hrl").
 -import(irc).
 -import(test).
 
 loop() ->
 	receive
-		{ act, Irc, #ircmsg{rawtxt="erl " ++ Code}, Dst, Nick, _ } ->
-			act(Irc, Dst, Nick, Code);
+		{ act, Pid, _Irc, #ircmsg{rawtxt="erl " ++ Code}, Dst, Nick, _ } ->
+			act(Pid, Dst, Nick, Code),
+			loop();
 		{ act, _, _, _, _, _, _ } ->
-			nil;
+			loop();
 		{ help, Pid, Dst, Nick } ->
 			Pid ! {q,
 				irc:resp(Dst, Nick, Nick ++ ": " ++
-					"[\"erl\" | Code ] - evaluate erlang source code")
-				}
+					"[\"erl\" | Code] -> evaluate erlang source code")
+				},
+			loop()
 	end.
 
 % evaluate the input as erlang 
-act(Irc, Dst, Nick, Code) ->
+act(Pid, Dst, Nick, Code) ->
 	io:format("Code=~p~n", [Code]),
 	RespLines = exec(Code),
 	Resps = % build an ircmsg for each line
 		lists:map(fun(Line) -> irc:resp(Dst, Nick, Line) end,
 			RespLines),
-	bot:q(Irc, Resps).
+	Pid ! {q, Resps}.
 
 % execute erlang source code and return [ "results" ]
 % TODO: possibly make size of output configurable...
@@ -106,7 +108,7 @@ enumerate_naughty(Tok) ->
 
 eval(Str) ->
   try
-		io:format("Str=~p~n", [Str]),
+		%io:format("Str=~p~n", [Str]),
     case erl_scan:string(Str) of
 			{error, _, _} ->
 				"syntax error";

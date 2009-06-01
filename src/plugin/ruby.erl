@@ -13,6 +13,7 @@
 	escape/1
 	]).
 -import(test).
+-import(irc).
 
 % ruby unit tests
 test() ->
@@ -31,19 +32,21 @@ test() ->
 loop() ->
 	receive
 		{act, Pid, _Irc, _, Dst, Nick, ["ruby" | Code]} ->
-			act(Pid, Dst, Nick, Code);
+			act(Pid, Dst, Nick, Code),
+			loop();
 		{act, _, _, _, _, _, _ } ->
-			nil;
+			loop();
 		{help, Pid, Dst, Nick} ->
 			Pid ! {q,
 				[ irc:resp(Dst, Nick, Nick ++ ": " ++ Msg)
 					|| Msg <-
 					[
-						"[\"ruby\" | Code ] - evaluate ruby source code at $SAFE level 4",
-						"Examples: \"hello\", 1+1, [1,2,3].map{|x|x*x}"
+						"[\"ruby\" | Code] -> evaluate ruby source code at $SAFE level 4",
+						"Code = [ \"hello\", 1+1, [1,2,3].map{|x|x*x} ] % examples"
 					]
 				]
-			}
+			},
+			loop()
 	end.
 
 % evaluate the input as ruby source code
@@ -54,7 +57,7 @@ act(Pid, Dst, Nick, Code) ->
 
 eval(Ruby) ->
   Run = "./exec /usr/bin/ruby \"-e puts Thread.start{ \\$SAFE=4; " ++ escape(Ruby) ++ " }.join.value.inspect\"",
-  io:format("Ruby=<~s> Run=~p~n", [Ruby, Run]), % print all commands, so we can see 
+  %io:format("Ruby=<~s> Run=~p~n", [Ruby, Run]), % print all commands, so we can see 
   Out = os:cmd(Run),
 	Lines = string:tokens(Out, "\r\n"),
 	if
@@ -146,6 +149,4 @@ test_escape() ->
   	{ [ "`ls`" ], "\\\`ls\\\`" },
   	{ [ "$SAFE=4" ], "\\\$SAFE=4" }
 	].
-
-
 

@@ -9,21 +9,25 @@
 -module(urlinfo).
 -export([test/0, loop/0, info/1, urlmatch/1]).
 
--include_lib("irc.hrl").
+-include_lib("../irc.hrl").
 -import(irc).
 -import(test).
+-define(timeout, 5000).
 
 loop() ->
 	receive
 		{act, Pid, _Irc, _, Dst, Nick, ["url", Url ]} ->
-			act(Pid, Dst, Nick, Url);
+			act(Pid, Dst, Nick, Url),
+			loop();
 		{act, Pid, _Irc, #ircmsg{rawtxt=Rawtxt}, Dst, _Nick, _Txt} ->
-			scan_for_urls(Pid, Rawtxt, Dst);
+			scan_for_urls(Pid, Rawtxt, Dst),
+			loop();
 		{help, Pid, Dst, Nick} ->
 			Pid ! {q,
 				irc:resp(Dst, Nick, Nick ++ ": " ++
-					"[\"url\", Url ] - fetch a URL's title and tinyurl, or display error")
-			}
+					"[\"url\", Url] -> fetch a URL's title and tinyurl")
+			},
+			loop()
 	end.
 
 % evaluate the input as erlang
@@ -58,7 +62,7 @@ test() ->
 		]).
 
 content(Url) ->
-	case http:request(get,{Url,[]},[{timeout,2000}],[]) of
+	case http:request(get,{Url,[]},[{timeout,?timeout}],[]) of
 		{ok, {{_Http, Code, _Msg}, _Header, Content}} -> {Code, Content };
 		{error, Why} -> {error, Why}
 		end.
@@ -105,14 +109,14 @@ ok(Url, _Code, Content) ->
 	Title = title(Content),
 	TitleTrim =
 		if
-			length(Title) > 30 ->
-				string:substr(Title, 1, 27) ++"...";
+			length(Title) > 40 ->
+				string:substr(Title, 1, 37) ++"...";
 			true -> Title
 		end,
 	TinyURL = tinyurl(Url),
 	lists:flatten(
-		io_lib:format("~s -> \"~s\" (~s)~n",
-			[Url, TitleTrim, TinyURL])).
+		io_lib:format("\"~s\" -> ~s (~s)~n",
+			[TitleTrim, TinyURL, Url])).
 
 info(Url) ->
 	{Code, Content} = content(Url),
