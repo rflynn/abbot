@@ -8,7 +8,8 @@
 -export(
 	[
 		test/0,
-		isquestion/1, dequestion/1, stripjunk/1
+		isquestion/1, dequestion/1, stripjunk/1,
+		ltrim_nick/3
 	]).
 
 -include_lib("irc.hrl").
@@ -112,4 +113,19 @@ test_stripjunk() ->
 		{ [ [","] ], 					[","] 		},
 		{ [ [":"] ], 					[":"] 		}
 	].
+
+% remove my name and any trailing punctuation and update Msg.rawtxt
+% example: "my_Nick: hello" -> "hello"
+ltrim_nick(Msg, Rawtxt, Nick) ->
+	Tok = string:tokens(Rawtxt, " :,"),
+	Rawtxt2 =
+		if
+			hd(Tok) == Nick ->
+					X1 = string:substr(Rawtxt, length(Nick)+1),
+					X2 = util:ltrim(X1, $,),
+					X3 = util:ltrim(X2, $:),
+					util:ltrim(X3, 32);
+			true -> Rawtxt
+			end,
+	Msg#ircmsg{rawtxt=Rawtxt2}.
 

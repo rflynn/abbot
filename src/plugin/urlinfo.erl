@@ -7,8 +7,49 @@
 % regularly on random web pages.
 
 -module(urlinfo).
--export([test/0, info/1, urlmatch/1]).
+-export([test/0, loop/0, info/1, urlmatch/1]).
+
+-include_lib("irc.hrl").
+-import(irc).
 -import(test).
+
+loop() ->
+	receive
+		{act, Pid, _Irc, _, Dst, Nick, ["url", Url ]} ->
+			act(Pid, Dst, Nick, Url);
+		{act, Pid, _Irc, #ircmsg{rawtxt=Rawtxt}, Dst, _Nick, _Txt} ->
+			scan_for_urls(Pid, Rawtxt, Dst);
+		{help, Pid, Dst, Nick} ->
+			Pid ! {q,
+				irc:resp(Dst, Nick, Nick ++ ": " ++
+					"[\"url\", Url ] - fetch a URL's title and tinyurl, or display error")
+			}
+	end.
+
+% evaluate the input as erlang
+act(Pid, Dst, Nick, Url) ->
+	Output = urlinfo:info(Url),
+	Msg = irc:resp(Dst, Nick, Output),
+	Pid ! { q, Msg }.
+
+% given a line of IRC input, scan it for URLs and
+% investigate each, producing a one-line report
+scan_for_urls(Pid, Rawtxt, Dst) ->
+	Urls = urlinfo:urlmatch(Rawtxt),
+	Urls2 = lists:filter( % don't tinyurl a tinyurl
+		fun(U) -> 0 == string:str(U, "http://tinyurl.") end,
+		Urls),
+	[ spawn(
+		fun() ->
+			Output = urlinfo:info(Url),
+			Oneline = lists:filter(
+				fun(C) -> % sanitize title contents
+					char:isalnum(C) or char:ispunct(C) or (C == 32)
+				end, Output),
+			Msg = irc:privmsg(Dst, Oneline),
+			Pid ! { q, Msg }
+			end) || Url <- Urls2
+	].
 
 test() ->
 	test:unit(urlinfo,
@@ -97,13 +138,12 @@ urlmatch(Str, Off, Matches) ->
 				% anchor
 				"(?:#[^ >})]*)?"
 				% query
-				"(?:[?]?"
+				"(?:\\?"
 					"(?:" ++
-						"(?:[a-zA-Z0-9@$%^\.]+)" ++ % key
-						"(?:" ++
-							"=" ++
-							"(?:[a-zA-Z0-9@$%^\.]+)[&]?" ++ % val
-						")?" ++
+						%"(?:&?[a-zA-Z0-9_@$%^\.-]+)" ++ % key
+						"(?:(?:&(amp;))?:?[^ \t>)}\\]=]+)" ++ % key
+							%"(?:[a-zA-Z0-9_@$%^\.-]+)" ++ % val
+							"(?:=[^ \t>)}\\]&]*)?" ++ % val
 					")*" ++
 				")?" ++
 				"",
@@ -146,5 +186,6 @@ test_urlmatch() ->
 		{ [ "lulz http://foo and http://bar ru1e$" ], ["http://foo", "http://bar"] },
 		{ [ "http://foo > http://bar" ], ["http://foo", "http://bar"] },
 		{ [ "here it is:http://www.youtube.com/watch?v=D3nRywGHZNs&feature=related" ], ["http://www.youtube.com/watch?v=D3nRywGHZNs&feature=related"] }
+		%{ [ "http://www.google.com/search?hl=en&rlz=1C1CHMZ_en___US311&q=\"George+Greer\"+schiavo&btnG=Search&aq=f&oq=&aqi=g6" ], "http://www.google.com/search?hl=en&rlz=1C1CHMZ_en___US311&q=\"George+Greer\"+schiavo&btnG=Search&aq=f&oq=&aqi=g6" }
 	].
 

@@ -4,13 +4,12 @@ CFLAGS = -W -Wall -Werror -pedantic
 ERLC = erlc
 
 all: exec htmlparser
+	$(ERLC) -o plugin plugin/*.erl
 	$(ERLC) *.erl
+	$(ERLC) -o htmlparser htmlparser/*.erl
 
 exec: exec.o
 
-htmlparser:
-	$(ERLC) -o htmlparser htmlparser/*.erl
-
 clean:
-	$(RM) *.beam exec
+	$(RM) *.o exec *.beam plugin/*.beam
 

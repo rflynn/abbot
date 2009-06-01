@@ -6,27 +6,63 @@
 -author("pizza@parseerror.com").
 -export(
 	[
-		conn/2, conn/1, loop/1,
+		test/0,
+		go/1,
+		start/2,
+		conn/3, loop/2,
 		q/2, deq/2, deqt/1,
-		nick/1, newnick/1,
-		test/0
+		newnick/1
 	]).
--define(master, "pizza_").
--define(nick, "abbot").
--define(chan, "#mod_spox").
+
+-define(master,     "pizza_").
+-define(nick,       "abbot").
+-define(chan,       "#mod_spox").
+-define(pass,       "foobar").
 -define(burstlines, 3).
--define(burstsec, 5).
+-define(burstsec,   5).
 
 -include_lib("irc.hrl").
 -import(irc).
 -import(react).
 -import(test).
--import(ruby).
 -import(ircutil).
--import(urlinfo).
+
+go(Where) ->
+	Plugins = load_plugins(),
+	start(Where, Plugins).
+
+load_plugins() ->
+	[].
+
+%load_plugins() ->
+%	case file:list_dir("plugin") of
+%	{ok, Files} ->
+%		Files2 = lists:filter(
+%			fun(F)-> string:str(F, ".beam") /= 0 end,
+%				Files),
+%		[ run_plugin(Name) || Name <- Files2 ];
+%	_ ->
+%		io:format("wtf~n"),
+%		exit("argh")
+%	end.
+
+run_plugin(Name) ->
+	Pid = spawn(list_to_atom(Name), loop, []),
+	{ Name, Pid }.
+
+% given a list of hosts or {host,port} destinations
+% and some plugins, launch all the connections
+start([], _) ->
+	nil;
+start([{Host,Port} | Rest], Plugins) ->
+	conn(Host, Port, Plugins) ++ start(Rest, Plugins);
+start([Host | Rest], Plugins) ->
+	conn(Host, 6667, Plugins) ++ start(Rest, Plugins);
+start({Host,Port}, Plugins) ->
+	conn(Host, Port, Plugins).
 
 % Connect to an IRC host:port. TCP line-based.
-conn(Host, Port) ->
+conn(Host, Port, Plugins) ->
 	unit_test(), % all unit tests run at startup, every time.
 	Irc = #ircconn{
 		host=Host, port=Port, key=Host, server="blah",
@@ -37,71 +73,135 @@ conn(Host, Port) ->
 	case gen_tcp:connect(Host, Port, [{packet, line}]) of
 		{ok, Sock} ->
 			io:format("Connected~n"),
+			Nick = (Irc#ircconn.user)#ircsrc.nick,
 			Irc2 = Irc#ircconn{sock=Sock},
-			Irc3 = nick(Irc2),
-			Deqt = timer:apply_interval(1000, bot, deqt, [self()]),
-			Irc4 = Irc3#ircconn{deqt=Deqt},
-			bot:loop(Irc4);
+			Irc3 = bot:q(Irc2, irc:nick(Nick)),
+			Irc4 = bot:q(Irc3, irc:user(Irc3)),
+			Deqt =
+				timer:apply_interval(1000, bot, deqt, [self()]),
+			Irc5 = Irc4#ircconn{deqt=Deqt},
+			bot:loop(Irc5, Plugins);
 		{error, Why} ->
 			io:format("Error: ~s~n", [Why]),
-			conn(Host, Port) % try harder. try again.
+			conn(Host, Port, Plugins) % try harder. try again.
 	end.
 
-% handle lines from Sock,
-% signals from deq timer
-loop(Irc) ->
+% API calls to modify the state of the Irc object;
+% made from the dequeue timer, from the plugins
+% and possibly from the shell
+loop(Irc, Plugins) ->
 	receive
 		deq ->
 			Irc2 = bot:deq(Irc, Irc#ircconn.q),
-			bot:loop(Irc2);
-		{q, #ircmsg{}=Msg} ->
-			% a way of queueing messages from other spawned processes
+			bot:loop(Irc2, Plugins);
+		{q, Msg} ->
+			% plugin req to queue an output msg
 			Irc2 = bot:q(Irc, Msg),
-			bot:loop(Irc2);
+			bot:loop(Irc2, Plugins);
+		{setstate, Key, Val} ->
+			% plugin req to update Irc state dict
+			Irc2 = irc:setstate(Irc, Key, Val),
+			bot:loop(Irc2, Plugins);
+		{irc, Irc2} ->
+			% update IRC object itself, i.e. when
+			% changing nick
+			bot:loop(Irc2, Plugins);
 		save ->
+			% serialize and save bot state to disk
 			irc_state_save(Irc),
-			bot:loop(Irc);
+			bot:loop(Irc, Plugins);
 		{tcp, Sock, Data} ->
+			% a line of IRC input from socket
 			io:format("<<< ~s", [Data]),
 			Irc2 = Irc#ircconn{sock=Sock},
 			Msg = irc:parse(Irc2, Data),
 			Irc3 = ircin(Irc2, Msg),
-			Irc4 = react(Irc3, Msg), % possibly queued data
-			bot:loop(Irc4);
+			Irc4 = react(Irc3, Msg, Plugins),
+			bot:loop(Irc4, Plugins);
 		{tcp_closed, _Sock} ->
 			irc_state_save(Irc),
+			% TODO: reconnect ffs
 			io:format("closed!~n");
 		{tcp_error, _Sock, Why} ->
 			irc_state_save(Irc),
+			% TODO: reconnect
 			io:format("error: ~s!~n", [Why]);
 		quit ->
 			irc_state_save(Irc),
 			Sock = Irc#ircconn.sock,
 			Deqt = Irc#ircconn.deqt,
-			io:format("[~w] Cancelling timer ~w...~n", [Sock, Deqt]),
+			io:format("[~w] Cancelling timer ~w...~n",
+				[Sock, Deqt]),
 			timer:cancel(Deqt),
 			io:format("[~w] Exiting...~n", [Sock]),
 			gen_tcp:close(Sock),
 			exit(stopped)
 	end.
 
-% process each line of irc input
-react(Irc, #ircmsg{type="PRIVMSG"}=Msg) ->
-	react:privmsg(Irc, Msg);
-react(Irc, #ircmsg{type="PING", src=Src}) -> % PING -> PONG
+% input handling; most of the stuff here is IRC
+% protocol crap to keep the connection alive and/or
+% sane, except...
+react(Irc, #ircmsg{type="PRIVMSG"}=Msg, Plugins) ->
+	% ... me. I send every privmsg to all our plugins;
+	% most of the time resulting in absolutely nothing;
+	% however, if something does match a pattern they're
+	% looking for and they produce output, they send loop()
+	% a {q, ...} signal to queue their output to be sent.
+	privmsg(Irc, Msg, Plugins);
+react(Irc, #ircmsg{type="PING", src=Src}, _) ->
+	% PING -> PONG
 	bot:q(Irc, #ircmsg{type="PONG", rawtxt=Src#ircsrc.raw});
-react(Irc, #ircmsg{type="376"}) -> % end of MOTD
+react(Irc, #ircmsg{type="376"}, _) ->
+	% end of MOTD, let's do stuff!
 	bot:q(Irc, #ircmsg{type="JOIN", rawtxt=?chan});
-react(Irc, #ircmsg{type="433"}) -> % nick already in use
+react(Irc, #ircmsg{type="433"}, _) ->
+	% nick already in use
 	NewNick = newnick((Irc#ircconn.user)#ircsrc.nick),
 	io:format("Switching nick to ~s...~n", [NewNick]),
 	NewUser = (Irc#ircconn.user)#ircsrc{nick=NewNick},
 	Irc2 = Irc#ircconn{user=NewUser},
 	bot:nick(Irc2);
-react(Irc, #ircmsg{type="ERROR", src=_Src}) -> % Oh noes...
+react(Irc, #ircmsg{type="ERROR", src=_Src}, _) ->
+	% Oh noes...
 	Irc;
-react(Irc, _) ->
+react(Irc, #ircmsg{type=Type}, _) ->
+	% something i didn't expect
+	io:format("*** TYPE ~s unhandled~n", [Type]),
 	Irc.
+
+% handle a privmsg
+privmsg(
+	Irc,
+	#ircmsg{
+		type="PRIVMSG",
+		dst=Dst,
+		src=#ircsrc{nick=From},
+		txt=[First|Rest]=All,
+		rawtxt=Rawtxt
+	}=Msg,
+	Plugins) ->
+	Me = (Irc#ircconn.user)#ircsrc.nick,
+	{Msg2, Txt} =
+		if % are you talking to me? i don't see anyone else...
+			Dst == Me ->
+				{Msg, All};
+			First == Me ->
+				% chan privmsg where my nick is the first word
+				Msg3 = ircutil:ltrim_nick(Msg, Rawtxt, Me),
+				{Msg3, Rest};
+			true ->
+				{Msg, All}
+		end,
+		Pid = self(),
+		% notify every single plugin about the msg we've received;
+		% most of which do absolutely nothing.
+		% if they do match some plugin pattern and generate a response
+		% or change in IRC state, they can "Pid ! foo", which will
+		% be processed in loop()
+		[
+			PluginPid ! {act, Pid, Irc, Msg2, Dst, From, Txt} ||
+			{_, PluginPid} <- Plugins
+		].
 
 % queue an #ircmsg{} for sending
 q(Irc, []) ->
@@ -160,11 +260,6 @@ sendburst(Irc, Cnt) ->
 ircin(Irc, #ircmsg{}=Msg) ->
 	irctypecnt(Irc, Msg).
 
-% identify ourselves to the network
-nick(Irc) ->
-	bot:q(Irc, [ irc:nick(Irc),
-	             irc:user(Irc) ]).
-
 % gen_tcp:send wrapper for #ircmsg
 send(Irc, Msg) ->
 	Data = irc:str(Msg),
@@ -175,10 +270,6 @@ send(Irc, Msg) ->
 % wrapper for all outgoing messages
 ircout(Irc, #ircmsg{}=Msg) ->
 	irctypecnt(Irc, Msg).
-
-% connect with default irc port; convenience wrapper
-conn(Host) ->
-	conn(Host, irc:default_port()).
 
 % increment type by count
 irctypecnt(Irc, #ircmsg{type=Type}=_Msg) ->

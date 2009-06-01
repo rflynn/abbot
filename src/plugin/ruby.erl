@@ -5,9 +5,16 @@
 % Ruby's $SAFE Levels described: <URL: http://www.ruby-doc.org/docs/ProgrammingRuby/html/taint.html>
 
 -module(ruby).
--export([test/0, eval/1, eval_oops/1, escape/1]).
+-export([
+	test/0,
+	loop/0,
+	eval/1,
+	eval_oops/1,
+	escape/1
+	]).
 -import(test).
 
+% ruby unit tests
 test() ->
 	Contains =
 		fun(Expect, Result) ->
@@ -19,6 +26,31 @@ test() ->
 			{ eval, test_eval(), Contains },
 			{ eval_oops, test_eval_oops(), Contains }
 		]).
+
+% receive loop
+loop() ->
+	receive
+		{act, Pid, _Irc, _, Dst, Nick, ["ruby" | Code]} ->
+			act(Pid, Dst, Nick, Code);
+		{act, _, _, _, _, _, _ } ->
+			nil;
+		{help, Pid, Dst, Nick} ->
+			Pid ! {q,
+				[ irc:resp(Dst, Nick, Nick ++ ": " ++ Msg)
+					|| Msg <-
+					[
+						"[\"ruby\" | Code ] - evaluate ruby source code at $SAFE level 4",
+						"Examples: \"hello\", 1+1, [1,2,3].map{|x|x*x}"
+					]
+				]
+			}
+	end.
+
+% evaluate the input as ruby source code
+act(Pid, Dst, Nick, Code) ->
+	Source = util:j(Code),
+	Output = ruby:eval(Source), % we get at most one line of output
+	Pid ! {q, irc:resp(Dst, Nick, Output)}.
 
 eval(Ruby) ->
   Run = "./exec /usr/bin/ruby \"-e puts Thread.start{ \\$SAFE=4; " ++ escape(Ruby) ++ " }.join.value.inspect\"",

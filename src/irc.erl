@@ -125,10 +125,10 @@ str(#ircmsg{type="QUIT"=Type, rawtxt=Rawtxt}) ->
 
 % wrapper for building certain types of #ircmsg{}s
 
-nick(Irc)	->
+nick(Nick)	->
 	#ircmsg{
 		type = "NICK",
-		src = (Irc#ircconn.user)#ircsrc.nick
+		src = Nick
 	}.
 
 user(Irc)	->
