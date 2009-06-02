@@ -13,23 +13,18 @@
 #include <sys/wait.h>
 #include <unistd.h>
 #include <errno.h>
-
-#define SLEEP_MSEC 400
+#include <signal.h>
 
 /*
-pizza@anchovie:~/proj/abbot/src$ time ./exec /usr/bin/ruby "-e puts Thread.start{ \$SAFE=4; [1,2,3].collect{|i|i*i} }.join.value.inspect"
-argv[0]: ./exec
-argv[1]: /usr/bin/ruby
-argv[2]: -e puts Thread.start{ $SAFE=4; [1,2,3].collect{|i|i*i} }.join.value.inspect
-argv[3]: (null)
-[1, 4, 9]
-real    0m0.083s
-user    0m0.000s
-sys     0m0.008s
-*/
+ * the effectiveness of this obviously
+ * depends on the capabilities and load
+ * on the current system
+ */
+#define SLEEP_MSEC 400
 
 /**
- * sleep()'s resolution is too coarse; nanosleep() isn't available everywhere...
+ * sleep()'s resolution is too coarse and
+ * nanosleep() isn't available everywhere...
  */
 static void do_sleep()
 {

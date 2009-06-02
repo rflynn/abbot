@@ -7,10 +7,11 @@
 % regularly on random web pages.
 
 -module(urlinfo).
--export([test/0, loop/0, info/1, urlmatch/1]).
+-export([test/0, loop/0, info/1, urlmatch/1, isParsable/1]).
 
 -include_lib("../irc.hrl").
 -import(irc).
+-import(ircutil).
 -import(test).
 -define(timeout, 5000).
 
@@ -22,6 +23,8 @@ loop() ->
 		{act, Pid, _Irc, #ircmsg{rawtxt=Rawtxt}, Dst, _Nick, _Txt} ->
 			scan_for_urls(Pid, Rawtxt, Dst),
 			loop();
+		{act, _, _, _, _, _, _} ->
+			loop();
 		{help, Pid, Dst, Nick} ->
 			Pid ! {q,
 				irc:resp(Dst, Nick, Nick ++ ": " ++
@@ -30,11 +33,25 @@ loop() ->
 			loop()
 	end.
 
-% evaluate the input as erlang
+% 
 act(Pid, Dst, Nick, Url) ->
-	Output = urlinfo:info(Url),
-	Msg = irc:resp(Dst, Nick, Output),
-	Pid ! { q, Msg }.
+	Output = info(Url),
+	if
+		Output /= nil ->
+			Msg = irc:resp(Dst, Nick, Output),
+			Pid ! { q, Msg };
+		true -> nil
+	end.
+
+info(Url) ->
+	{Code, Content} = content(Url),
+	io:format("info Url=~s Code=~p Content=...~n",
+		[Url,Code]),
+	case Code of
+		notparsable -> nil;
+		error -> error(Url, Content);
+		_ -> ok(Url, Code, Content)
+	end.
 
 % given a line of IRC input, scan it for URLs and
 % investigate each, producing a one-line report
@@ -42,31 +59,32 @@ scan_for_urls(Pid, Rawtxt, Dst) ->
 	Urls = % detect output from other abbots
 		case re:run(Rawtxt,
 			"^(" ++
-				"urlinfo" ++
+				% now we always prefix to detect other bots
+				"url(?:info)? " ++
 				"|" ++
-				"\".*?\" -> http://tinyurl\\.com\\S+ \\(https?://.*\\)" ++ % success
+			 	% older success message format
+				"\".*?\" -> http://tinyurl\\.com\\S+ \\(https?://.*\\)" ++
 				"|" ++
-				"https://\\S+ -> \\S+" ++ % failure
+				% older error result
+				"https://\\S+ -> \\S+" ++
 			")$") of
 			{match,_} -> [];	% from another abbot, ignore URLs!
 												% this avoids an endless feedback cycle
 			_ -> urlinfo:urlmatch(Rawtxt)
 			end,
-	Urls2 = lists:filter( 
-		fun(U) ->
-			0 == string:str(U, "http://tinyurl.") % don't tinyurl a tinyurl
-		end, Urls),
 	[ spawn(
 		fun() ->
-			Output = urlinfo:info(Url),
-			Oneline = lists:filter(
-				fun(C) -> % sanitize title contents
-					char:isalnum(C) or char:ispunct(C) or (C == 32)
-				end, Output),
-			Msg = irc:privmsg(Dst, Oneline),
-			Pid ! { q, Msg }
-			end)
-		|| Url <- Urls2
+			Output = info(Url),
+			if
+				Output /= nil ->
+					Oneline = lists:filter(
+						fun(C) -> % sanitize title contents
+							char:isalnum(C) or char:ispunct(C) or (C == 32)
+						end, Output),
+					Pid ! {q, irc:privmsg(Dst, Oneline)};
+				true -> nil
+			end
+		end) || Url <- Urls
 	].
 
 test() ->
@@ -75,9 +93,30 @@ test() ->
 			{ urlmatch, test_urlmatch() }
 		]).
 
+% see if the Content-Type header indicates an html or xml type document
+isParsable([]) -> true;
+isParsable([{Key,Val}|Rest]) ->
+	if
+		"content-type" == Key ->
+			(
+				 ("text/plain" == string:substr(Val, 1, 10))
+			or ("text/html" == string:substr(Val, 1, 9))
+			or ("text/xhtml" == string:substr(Val, 1, 10))
+			or ("text/xhtml+xml" == string:substr(Val, 1, 14))
+			or ("application/xhtml+xml" == string:substr(Val, 1, 21))
+			);
+		true -> isParsable(Rest)
+	end.
+
+% return HTML content
+% non-HTML or XHTML is considered an error
 content(Url) ->
 	case http:request(get,{Url,[]},[{timeout,?timeout}],[]) of
-		{ok, {{_Http, Code, _Msg}, _Header, Content}} -> {Code, Content };
+		{ok, {{_Http, Code, _Msg}, Headers, Content}} ->
+			case isParsable(Headers) of
+				true -> {Code, Content};
+				false -> {notparsable, notHtml}
+			end;
 		{error, Why} -> {error, Why}
 		end.
 
@@ -120,35 +159,23 @@ tinyurl(Url) ->
 % url fetc failed, display url and error
 error(Url, Code) ->
 	lists:flatten(
-		io_lib:format("urlinfo ~s -> ~s", [Url, Code])).
+		io_lib:format("url ~s -> ~s", [Url, Code])).
 
 % url fetch succeeded, display url, title and tinyurl
 ok(Url, _Code, Content) ->
-	Title = title(Content),
-	TitleTrim =
-		if
-			length(Title) > 50 ->
-				string:substr(Title, 1, 47) ++"...";
-			true -> Title
-		end,
+	Title = ircutil:dotdotdot(title(Content), 70),
 	TinyURL = tinyurl(Url),
 	TinyURL2 =
-		if % don't bother tinyurl-ing if it's not much shorter
+		% don't bother tinyurl-ing if it's not much shorter
+		% also note that this will automatically reject other
+		% tinyurl-like sites, an unexpected benefit
+		if 
 			length(TinyURL) + 15 >= length(Url) -> "";
 			true -> TinyURL
 		end,
 	lists:flatten(
-		io_lib:format("urlinfo \"~s\"~s",
-			[TitleTrim, TinyURL2])).
-
-info(Url) ->
-	{Code, Content} = content(Url),
-	io:format("info Url=~s Code=~p Content=...~n",
-		[Url,Code]),
-	case Code of
-		error -> error(Url, Content);
-		_ -> ok(Url, Code, Content)
-	end.
+		io_lib:format("url \"~s\" ~s",
+			[Title, TinyURL2])).
 
 % given an arbitrary string, produce a list of all
 % http urls contained within

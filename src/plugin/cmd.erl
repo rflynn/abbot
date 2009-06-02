@@ -32,6 +32,9 @@ loop() ->
     { act, Pid, Irc, _, _, Nick, ["nick", NewNick] } ->
       nick(Pid, Irc, Nick, NewNick),
 			loop();
+    { act, Pid, Irc, _, _, Nick, ["plugins", "reload"] } ->
+      plugins(Pid, Irc, Nick, "reload"),
+			loop();
     { act, Pid, Irc, _, _, Nick, ["master", Master, Password] } ->
       master(Pid, Irc, Nick, Master, Password),
 			loop();
@@ -110,6 +113,12 @@ master(Pid, Irc, Nick, Master, Password) ->
 		true ->
 			Pid ! {q, irc:privmsg(Nick, "Wrong password bucko!")}
 	end.
+
+plugins(Pid, Irc, Nick, "reload") ->
+	byperm(Irc, Nick, ["core", "plugins","reload"],
+		fun() ->
+			Pid ! {plugins, reload}
+		end).
 
 quit(Pid, Irc, Nick, Snarky) ->
 	byperm(Irc, Nick, ["irc","quit"],

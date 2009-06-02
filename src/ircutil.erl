@@ -1,14 +1,16 @@
 % ex: set ts=2 noet:
 % $Id$
-% stuff too general for our own implementation, but too bot-specific
-% for irc or util
+% generic utilities sensible for an IRC environment
 
 -module(ircutil).
 -author("pizza@parseerror.com").
 -export(
 	[
 		test/0,
-		isquestion/1, dequestion/1, stripjunk/1,
+		isquestion/1,
+		dequestion/1,
+		stripjunk/1,
+		dotdotdot/2,
 		ltrim_nick/3
 	]).
 
@@ -47,6 +49,7 @@ test_isquestion() ->
 		{ [ ["a?"] ], 		true  },
 		{ [ ["a","b?"] ], true  }
 	].
+
 
 % remove trailing "?" from wordlist
 dequestion([]) ->
@@ -128,4 +131,16 @@ ltrim_nick(Msg, Rawtxt, Nick) ->
 			true -> Rawtxt
 			end,
 	Msg#ircmsg{rawtxt=Rawtxt2}.
+
+% trim a string at a maxlen, show "..." suffix if trimmed
+dotdotdot(Str, MaxLen) ->
+	if
+		length(Str) > MaxLen ->
+			string:substr(Str, 1, MaxLen - 3) ++ "...";
+		true ->
+			Str
+	end.
+
+
+
 

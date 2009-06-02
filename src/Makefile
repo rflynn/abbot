@@ -2,8 +2,10 @@
 
 CFLAGS = -W -Wall -Werror -pedantic
 ERL = erl
+CP = cp -f
 
 all: exec
+	$(CP) exec plugin/
 	$(ERL) -make
 
 exec: exec.o

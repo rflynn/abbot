@@ -2,6 +2,12 @@
 % $Id$
 % top-level bot loop; should be fairly generic
 
+% user-configurable stuff
+-define(master,     "pizza_").
+-define(nick,       "abbot").
+-define(chan,       "#mod_spox").
+-define(pass,       "foobar!"). % password for changing "master" user
+
 -module(bot).
 -author("pizza@parseerror.com").
 -export(
@@ -14,11 +20,6 @@
 		newnick/1
 	]).
 
-% user-configurable stuff
--define(master,     "pizza_").
--define(nick,       "abbot").
--define(chan,       "#mod_spox").
--define(pass,       "foobar!"). % password for changing "master" user
 % output queue config
 -define(qinterval,  1000). % milliseconds between single-line sends
 -define(burstlines, 3). % max output lines to burst at once
@@ -36,6 +37,7 @@ go(Where) ->
 	% trap exits. this means that when a plugin
 	% crashes, we catch its exit message and reincarnate it.
 	process_flag(trap_exit, true),
+	io:format("Loading plugins, running unit tests. Be patient.~n"),
 	Plugins = plugins_load(),
 	io:format("Plugins loaded.~n"),
 	State = start(Where, Plugins),
@@ -144,13 +146,14 @@ loop(Irc, Plugins) ->
 			loop(Irc2, Plugins);
 		{setstate, Key, Val} ->
 			% plugin req to update Irc state dict
-			io:format("loop {setstate, Key=~p, Val=~p}~n", [Key, Val]),
+			io:format("loop {setstate, Key=~p, Val=~p}~n",
+				[Key, Val]),
 			Irc2 = irc:setstate(Irc, Key, Val),
 			loop(Irc2, Plugins);
 		{irc, Irc2} ->
 			% update IRC object itself, i.e. when
 			% changing nick
-			io:format("loop {irc, Irc2=~p}~n", [Irc2]),
+			io:format("loop {irc, Irc2}~n"),
 			loop(Irc2, Plugins);
 		save ->
 			% serialize and save bot state to disk
@@ -158,11 +161,13 @@ loop(Irc, Plugins) ->
 			irc_state_save(Irc),
 			loop(Irc, Plugins);
 		{'EXIT', Pid, Reason} ->
-			% catch plugin crashes
+			% catch plugin reloads/crashes
 			io:format("loop {'EXIT', Pid=~p Reason=~p}~n",
 				[Pid, Reason]),
 			Plugins2 = plugin_restart(Plugins, Pid),
 			loop(Irc, Plugins2);
+		{plugins, reload} ->
+			loop(Irc, plugins_load());
 		{tcp, Sock, Data} ->
 			% a line of IRC input from socket
 			io:format("<<< ~s", [Data]),
@@ -273,6 +278,7 @@ do_privmsg(Plugins, Irc, Msg2, Dst, From, Txt) ->
 		{_Name,  _Atom, PluginPid} <- Plugins
 	],
 	Irc.
+
 
 help(Irc, Plugins, Dst, Nick, ["help"]) ->
 	% for a generic help message, list all plugins

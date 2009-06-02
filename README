@@ -15,7 +15,7 @@ get_started() ->
   "install erlang",
   "git clone git://github.com/pizza/abbot.git ~/abbot",
   "cd ~/abbot/src",
-  "modify bot.erl master and chan -defines",
+  "modify bot.erl master, pass and chan -defines",
   "make",
   "./abbot.sh",
   Bot0 = spawn(bot, go, ["irc.dal.net"]),
