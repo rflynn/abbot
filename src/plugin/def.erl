@@ -45,14 +45,14 @@ loop() ->
 			dict_get(Pid, Irc, Dst, Nick, "is", Term),
 			loop();
 		% dict store
-		{act, Pid, Irc, _, Dst, Nick, [Term, "is" | Rest]} ->
-			dict_set(Pid, Irc, Dst, Nick, Term, Rest),
+		{act, Pid, Irc, _, _, Nick, [Term, "is" | Rest]} ->
+			dict_set(Pid, Irc, Nick, Term, Rest),
 			loop();
-		{act, Pid, Irc, _, Dst, Nick, [Term, "are" | Rest]} ->
-			dict_set(Pid, Irc, Dst, Nick, Term, Rest),
+		{act, Pid, Irc, _, _, Nick, [Term, "are" | Rest]} ->
+			dict_set(Pid, Irc, Nick, Term, Rest),
 			loop();
-		{act, Pid, Irc, _, Dst, Nick, [Term, "am" | Rest]} ->
-			dict_set(Pid, Irc, Dst, Nick, Term, Rest),
+		{act, Pid, Irc, _, _, Nick, [Term, "am" | Rest]} ->
+			dict_set(Pid, Irc, Nick, Term, Rest),
 			loop();
 		% dict forget
 		{act, Pid, Irc, _, Dst, Nick, ["forget" | Term]} ->
@@ -76,14 +76,14 @@ loop() ->
 % NOTE: translations:
 %		"you" -> "i" ("what are you?" -> "i am ...")
 %		"i" -> Nick ("i am tired" -> Nick ++ " is tired")
-dict_set(Pid, Irc, Dst, Nick, "you", Rest) ->
-	dict_set_(Pid, Irc, Dst, Nick, "i", Rest);
-dict_set(Pid, Irc, Dst, Nick, "i", Rest) ->
-	dict_set_(Pid, Irc, Dst, Nick, Nick, Rest);
-dict_set(Pid, Irc, Dst, Nick, Term, Rest) ->
-	dict_set_(Pid, Irc, Dst, Nick, Term, Rest).
+dict_set(Pid, Irc, _Nick, "you", Rest) ->
+	dict_set_(Pid, Irc, "i", Rest);
+dict_set(Pid, Irc, Nick, "i", Rest) ->
+	dict_set_(Pid, Irc, Nick, Rest);
+dict_set(Pid, Irc, _Nick, Term, Rest) ->
+	dict_set_(Pid, Irc, Term, Rest).
 
-dict_set_(Pid, Irc, Dst, Nick, Term, Rest) ->
+dict_set_(Pid, Irc, Term, Rest) ->
 	Is = irc:state(Irc, is, dict:new()),
 	Term2 = dict_term([Term]),
 	Val = util:j(Rest),

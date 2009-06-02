@@ -39,10 +39,21 @@ act(Pid, Dst, Nick, Url) ->
 % given a line of IRC input, scan it for URLs and
 % investigate each, producing a one-line report
 scan_for_urls(Pid, Rawtxt, Dst) ->
-	Urls = urlinfo:urlmatch(Rawtxt),
+	Urls = % detect output from other abbots
+		case re:run(Rawtxt,
+			"^(" ++
+				"\".*?\" -> http://tinyurl\\.com\\S+ \\(https?://.*\\)" ++ % success
+				"|" ++
+				"https://\\S+ -> \\S+" ++ % failure
+			")$") of
+			{match,_} -> [];	% from another abbot, ignore URLs!
+												% this avoids an endless feedback cycle
+			_ -> urlinfo:urlmatch(Rawtxt)
+			end,
 	Urls2 = lists:filter( % don't tinyurl a tinyurl
-		fun(U) -> 0 == string:str(U, "http://tinyurl.") end,
-		Urls),
+		fun(U) ->
+			0 == string:str(U, "http://tinyurl.")
+		end, Urls),
 	[ spawn(
 		fun() ->
 			Output = urlinfo:info(Url),
@@ -52,7 +63,8 @@ scan_for_urls(Pid, Rawtxt, Dst) ->
 				end, Output),
 			Msg = irc:privmsg(Dst, Oneline),
 			Pid ! { q, Msg }
-			end) || Url <- Urls2
+			end)
+		|| Url <- Urls2
 	].
 
 test() ->
@@ -102,7 +114,7 @@ tinyurl(Url) ->
 % url fetc failed, display url and error
 error(Url, Code) ->
 	lists:flatten(
-		io_lib:format("~s -> ~s~n", [Url, Code])).
+		io_lib:format("~s -> ~s", [Url, Code])).
 
 % url fetch succeeded, display url, title and tinyurl
 ok(Url, _Code, Content) ->
@@ -115,7 +127,7 @@ ok(Url, _Code, Content) ->
 		end,
 	TinyURL = tinyurl(Url),
 	lists:flatten(
-		io_lib:format("\"~s\" -> ~s (~s)~n",
+		io_lib:format("\"~s\" -> ~s (~s)",
 			[TitleTrim, TinyURL, Url])).
 
 info(Url) ->
@@ -136,9 +148,9 @@ urlmatch(Str, Off, Matches) ->
 	case re:run(Str,
 				"https?://" ++ % protocol
  				% domain
-				"(?:(?:[a-zA-Z0-9]+)\\.)*(?:[a-zA-Z]+)" ++
+				"(?:(?:[a-zA-Z0-9-]+)\\.)*(?:[a-zA-Z]+)" ++
 				% path
-				"(?:/[a-zA-Z0-9-]*)*" ++
+				"(?:/[^/ >)}\\]]*)*" ++
 				% anchor
 				"(?:#[^ >})]*)?"
 				% query
@@ -189,7 +201,11 @@ test_urlmatch() ->
 		{ [ "http://foo http://bar" ], ["http://foo", "http://bar"] },
 		{ [ "lulz http://foo and http://bar ru1e$" ], ["http://foo", "http://bar"] },
 		{ [ "http://foo > http://bar" ], ["http://foo", "http://bar"] },
-		{ [ "here it is:http://www.youtube.com/watch?v=D3nRywGHZNs&feature=related" ], ["http://www.youtube.com/watch?v=D3nRywGHZNs&feature=related"] }
-		%{ [ "http://www.google.com/search?hl=en&rlz=1C1CHMZ_en___US311&q=\"George+Greer\"+schiavo&btnG=Search&aq=f&oq=&aqi=g6" ], "http://www.google.com/search?hl=en&rlz=1C1CHMZ_en___US311&q=\"George+Greer\"+schiavo&btnG=Search&aq=f&oq=&aqi=g6" }
+		{ [ "here it is:http://www.youtube.com/watch?v=D3nRywGHZNs&feature=related" ], ["http://www.youtube.com/watch?v=D3nRywGHZNs&feature=related"] },
+		% FIXME: this appears to return the right answer but does not match?!
+		%{ [ "http://www.google.com/search?hl=en&rlz=1C1CHMZ_en___US311&q=\"George+Greer\"+schiavo&btnG=Search&aq=f&oq=&aqi=g6" ], "http://www.google.com/search?hl=en&rlz=1C1CHMZ_en___US311&q=\"George+Greer\"+schiavo&btnG=Search&aq=f&oq=&aqi=g6" },
+		{ [ "http://2.bp.blogspot.com/_Dc8q8nuzrHw/ShKXzIatZ4I/AAAAAAAAE3o/ZYuLaiTcbBU/s1600-h/AXEschedule.jpg" ], ["http://2.bp.blogspot.com/_Dc8q8nuzrHw/ShKXzIatZ4I/AAAAAAAAE3o/ZYuLaiTcbBU/s1600-h/AXEschedule.jpg"] },
+		{ [ "http://www.php.net/manual/en/function.settype.php" ], ["http://www.php.net/manual/en/function.settype.php"] },
+		{ [ "http://a-b-c.com/" ], ["http://a-b-c.com/"] }
 	].
 

@@ -15,7 +15,7 @@
 	]).
 
 % user-configurable stuff
--define(master,     "pizza__").
+-define(master,     "pizza_").
 -define(nick,       "abbot").
 -define(chan,       "#mod_spox").
 -define(pass,       "foobar"). % password for changing "master" user
@@ -33,6 +33,9 @@
 % top-level launch
 % Bot0 = spawn(bot, go, ["irc.dal.net"]).
 go(Where) ->
+	% trap exits. this means that when a plugin
+	% crashes, we catch its exit message and reincarnate it.
+	process_flag(trap_exit, true),
 	Plugins = plugins_load(),
 	io:format("Plugins loaded.~n"),
 	State = start(Where, Plugins),
@@ -73,10 +76,14 @@ plugin_run(Name) ->
 % DeadPid crashed, search Plugins for a matching pid and
 % replace entry with new instance of plugin
 plugin_restart(Plugins, DeadPid) ->
+	io:format("Restarting Pid ~p...~n", [DeadPid]),
 	lists:map(
 		fun({Name, _Atom, Pid}=P) ->
 			if
-				Pid == DeadPid -> plugin_run(Name);
+				Pid == DeadPid ->
+					io:format("Pid ~p was the ~s plugin, restarting...~n",
+						[DeadPid, Name]),
+					plugin_run(Name);
 				true -> P
 			end
 		end,
@@ -150,9 +157,10 @@ loop(Irc, Plugins) ->
 			io:format("loop {save}~n"),
 			irc_state_save(Irc),
 			loop(Irc, Plugins);
-		{'EXIT', Pid} ->
+		{'EXIT', Pid, Reason} ->
 			% catch plugin crashes
-			io:format("loop {'EXIT', Pid=~p}~n", [Pid]),
+			io:format("loop {'EXIT', Pid=~p Reason=~p}~n",
+				[Pid, Reason]),
 			Plugins2 = plugin_restart(Plugins, Pid),
 			loop(Irc, Plugins2);
 		{tcp, Sock, Data} ->
@@ -209,7 +217,7 @@ react(Irc, #ircmsg{type="433"}, _) ->
 	io:format("Switching nick to ~s...~n", [NewNick]),
 	NewUser = (Irc#ircconn.user)#ircsrc{nick=NewNick},
 	Irc2 = Irc#ircconn{user=NewUser},
-	bot:nick(Irc2);
+	bot:q(Irc2, irc:nick(NewNick));
 react(Irc, #ircmsg{type="ERROR", src=_Src}, _) ->
 	% Oh noes...
 	Irc;
