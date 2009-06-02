@@ -1,6 +1,6 @@
 % ex: set ts=2 noet:
 % given a string possibly containing URLs as input, parse out,
-% visit, and report on each link; provide a title and a tinyurl
+% visit, and report on each link; provide a Title and a tinyurl
 % link if valid and an http error code if not
 
 % NOTE: the mochiweb package i'm using crashes
@@ -42,6 +42,8 @@ scan_for_urls(Pid, Rawtxt, Dst) ->
 	Urls = % detect output from other abbots
 		case re:run(Rawtxt,
 			"^(" ++
+				"urlinfo" ++
+				"|" ++
 				"\".*?\" -> http://tinyurl\\.com\\S+ \\(https?://.*\\)" ++ % success
 				"|" ++
 				"https://\\S+ -> \\S+" ++ % failure
@@ -50,9 +52,9 @@ scan_for_urls(Pid, Rawtxt, Dst) ->
 												% this avoids an endless feedback cycle
 			_ -> urlinfo:urlmatch(Rawtxt)
 			end,
-	Urls2 = lists:filter( % don't tinyurl a tinyurl
+	Urls2 = lists:filter( 
 		fun(U) ->
-			0 == string:str(U, "http://tinyurl.")
+			0 == string:str(U, "http://tinyurl.") % don't tinyurl a tinyurl
 		end, Urls),
 	[ spawn(
 		fun() ->
@@ -98,12 +100,16 @@ title_([_|_]=Content) ->
 	% work for random html, since one doesn't know what to
 	% expect. modify it to be case-insensitive to get rid of
 	% crappy wraper code like this(!)
-	R = mochiweb_xpath:execute("/HTML/HEAD/TITLE/text()", Doc, MyFuns),
+	R = mochiweb_xpath:execute("//TITLE/text()", Doc, MyFuns),
 	if
 		[] /= R -> hd(R);
 		true ->
-			hd(mochiweb_xpath:execute(
-				"/html/head/title/text()", Doc, MyFuns))
+			T = mochiweb_xpath:execute(
+				"//title/text()", Doc, MyFuns),
+			if
+				[] /= T -> hd(T);
+				true -> ""
+			end
 	end.
 
 tinyurl(Url) ->
@@ -114,26 +120,31 @@ tinyurl(Url) ->
 % url fetc failed, display url and error
 error(Url, Code) ->
 	lists:flatten(
-		io_lib:format("~s -> ~s", [Url, Code])).
+		io_lib:format("urlinfo ~s -> ~s", [Url, Code])).
 
 % url fetch succeeded, display url, title and tinyurl
 ok(Url, _Code, Content) ->
 	Title = title(Content),
 	TitleTrim =
 		if
-			length(Title) > 40 ->
-				string:substr(Title, 1, 37) ++"...";
+			length(Title) > 50 ->
+				string:substr(Title, 1, 47) ++"...";
 			true -> Title
 		end,
 	TinyURL = tinyurl(Url),
+	TinyURL2 =
+		if % don't bother tinyurl-ing if it's not much shorter
+			length(TinyURL) + 15 >= length(Url) -> "";
+			true -> TinyURL
+		end,
 	lists:flatten(
-		io_lib:format("\"~s\" -> ~s (~s)",
-			[TitleTrim, TinyURL, Url])).
+		io_lib:format("urlinfo \"~s\"~s",
+			[TitleTrim, TinyURL2])).
 
 info(Url) ->
 	{Code, Content} = content(Url),
-	io:format("info Url=~s Code=~p Content=~p~n",
-		[Url,Code,Content]),
+	io:format("info Url=~s Code=~p Content=...~n",
+		[Url,Code]),
 	case Code of
 		error -> error(Url, Content);
 		_ -> ok(Url, Code, Content)
@@ -206,6 +217,7 @@ test_urlmatch() ->
 		%{ [ "http://www.google.com/search?hl=en&rlz=1C1CHMZ_en___US311&q=\"George+Greer\"+schiavo&btnG=Search&aq=f&oq=&aqi=g6" ], "http://www.google.com/search?hl=en&rlz=1C1CHMZ_en___US311&q=\"George+Greer\"+schiavo&btnG=Search&aq=f&oq=&aqi=g6" },
 		{ [ "http://2.bp.blogspot.com/_Dc8q8nuzrHw/ShKXzIatZ4I/AAAAAAAAE3o/ZYuLaiTcbBU/s1600-h/AXEschedule.jpg" ], ["http://2.bp.blogspot.com/_Dc8q8nuzrHw/ShKXzIatZ4I/AAAAAAAAE3o/ZYuLaiTcbBU/s1600-h/AXEschedule.jpg"] },
 		{ [ "http://www.php.net/manual/en/function.settype.php" ], ["http://www.php.net/manual/en/function.settype.php"] },
-		{ [ "http://a-b-c.com/" ], ["http://a-b-c.com/"] }
+		{ [ "http://a-b-c.com/" ], ["http://a-b-c.com/"] },
+		{ [ "http://a.ws" ], ["http://a.ws"] }
 	].
 
