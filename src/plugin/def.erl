@@ -100,13 +100,14 @@ dict_get(Pid, Irc, Dst, Nick, _Connect, ["you"]) ->
 dict_get(Pid, Irc, Dst, Nick, Connect, Term) ->
 	Is = irc:state(Irc, is, dict:new()),
 	Term2 = dict_term(Term),
-	Answer = 
-		case dict:find(Term2, Is) of
-			error -> "I don't know";
-			{ok, X} -> Term2 ++ " " ++ Connect ++ " " ++ X 
-		end,
-	io:format("dict_get Term2=~p Answer=~p~n", [Term2, Answer]),
-	Pid ! { q, irc:resp(Dst, Nick, Nick ++ ": " ++ Answer) }.
+	case dict:find(Term2, Is) of
+		error -> nil;
+		{ok, X} ->
+			Answer = Term2 ++ " " ++ Connect ++ " " ++ X,
+			io:format("dict_get Term2=~p Answer=~p~n",
+				[Term2, Answer]),
+			Pid ! { q, irc:resp(Dst, Nick, Nick ++ ": " ++ Answer) }
+	end.
 
 % 
 dict_forget(Pid, Irc, Dst, Nick, Term) ->

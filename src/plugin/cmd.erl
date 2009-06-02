@@ -32,6 +32,9 @@ loop() ->
     { act, Pid, Irc, _, _, Nick, ["nick", NewNick] } ->
       nick(Pid, Irc, Nick, NewNick),
 			loop();
+    { act, Pid, Irc, _, _, Nick, ["master", Master, Password] } ->
+      master(Pid, Irc, Nick, Master, Password),
+			loop();
     { act, Pid, Irc, _, _, Nick, ["quit" | Snarky] } ->
       quit(Pid, Irc, Nick, Snarky),
 			loop();
@@ -98,6 +101,15 @@ nick(Pid, Irc, Nick, NewNick) ->
 			Pid ! {irc, Irc2},
 			Pid ! {q, irc:nick(NewNick)}
 		end).
+
+master(Pid, Irc, Nick, Master, Password) ->
+	if
+		Password == Irc#ircconn.pass ->
+			Pid ! {irc, Irc#ircconn{master=Master}},
+			Pid ! {q, irc:privmsg(Nick, "Hello, master.")};
+		true ->
+			Pid ! {q, irc:privmsg(Nick, "Wrong password bucko!")}
+	end.
 
 quit(Pid, Irc, Nick, Snarky) ->
 	byperm(Irc, Nick, ["irc","quit"],

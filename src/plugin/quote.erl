@@ -40,7 +40,7 @@ quote(Pid, Irc, _Msg, Dst, Nick, ["quote", Who | Search]) ->
 	if
 		not PathSafe -> Irc;
 		PathSafe ->
-			Path = "quote/" ++ Someone,
+			Path = "../quote/" ++ Someone,
 			Quotes = lists:filter(
 				fun(Q) ->
 					("" == Search2) or (string:str(Q, Search2) /= 0)

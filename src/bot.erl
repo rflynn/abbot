@@ -18,7 +18,7 @@
 -define(master,     "pizza_").
 -define(nick,       "abbot").
 -define(chan,       "#mod_spox").
--define(pass,       "foobar"). % password for changing "master" user
+-define(pass,       "foobar!"). % password for changing "master" user
 % output queue config
 -define(qinterval,  1000). % milliseconds between single-line sends
 -define(burstlines, 3). % max output lines to burst at once
@@ -226,6 +226,8 @@ react(Irc, #ircmsg{type="NOTICE"}, _) ->
 react(Irc, #ircmsg{type="PART"}, _) ->
 	Irc;
 react(Irc, #ircmsg{type="JOIN"}, _) ->
+	Irc;
+react(Irc, #ircmsg{type="QUIT"}, _) ->
 	Irc;
 react(Irc, #ircmsg{type=Type}, _) ->
 	% something i didn't expect
