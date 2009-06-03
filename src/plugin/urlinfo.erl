@@ -17,8 +17,8 @@
 
 loop() ->
 	receive
-		{act, Pid, _Irc, _, Dst, Nick, ["url", Url ]} ->
-			act(Pid, Dst, Nick, Url),
+		{act, Pid, _Irc, #ircmsg{rawtxt=Rawtxt}, Dst, Nick, ["url", Url ]} ->
+			act(Pid, Rawtxt, Dst, Nick, Url),
 			loop();
 		{act, Pid, _Irc, #ircmsg{rawtxt=Rawtxt}, Dst, _Nick, _Txt} ->
 			scan_for_urls(Pid, Rawtxt, Dst),
@@ -34,23 +34,25 @@ loop() ->
 	end.
 
 % 
-act(Pid, Dst, Nick, Url) ->
-	Output = info(Url),
+act(Pid, Rawtxt, Dst, Nick, Url) ->
+	Output = info(Url, Rawtxt),
 	if
 		Output /= nil ->
-			Msg = irc:resp(Dst, Nick, Output),
-			Pid ! { q, Msg };
+			Pid ! { q, irc:resp(Dst, Nick, Output) };
 		true -> nil
 	end.
 
 info(Url) ->
+	info(Url, "").
+
+info(Url, Rawtxt) ->
 	{Code, Content} = content(Url),
 	io:format("info Url=~s Code=~p Content=...~n",
 		[Url,Code]),
 	case Code of
 		notparsable -> nil;
 		error -> error(Url, Content);
-		_ -> ok(Url, Code, Content)
+		_ -> ok(Url, Code, Content, Rawtxt)
 	end.
 
 % given a line of IRC input, scan it for URLs and
@@ -61,12 +63,6 @@ scan_for_urls(Pid, Rawtxt, Dst) ->
 			"^(" ++
 				% now we always prefix to detect other bots
 				"url(?:info)? " ++
-				"|" ++
-			 	% older success message format
-				"\".*?\" -> http://tinyurl\\.com\\S+ \\(https?://.*\\)" ++
-				"|" ++
-				% older error result
-				"https://\\S+ -> \\S+" ++
 			")$") of
 			{match,_} -> [];	% from another abbot, ignore URLs!
 												% this avoids an endless feedback cycle
@@ -74,15 +70,10 @@ scan_for_urls(Pid, Rawtxt, Dst) ->
 			end,
 	[ spawn(
 		fun() ->
-			Output = info(Url),
+			Output = info(Url, Rawtxt),
 			if
-				Output /= nil ->
-					Oneline = lists:filter(
-						fun(C) -> % sanitize title contents
-							char:isalnum(C) or char:ispunct(C) or (C == 32)
-						end, Output),
-					Pid ! {q, irc:privmsg(Dst, Oneline)};
-				true -> nil
+				Output == nil -> nil;
+				true -> Pid ! {q, irc:privmsg(Dst, Output)}
 			end
 		end) || Url <- Urls
 	].
@@ -94,6 +85,7 @@ test() ->
 		]).
 
 % see if the Content-Type header indicates an html or xml type document
+% NOTE: http:request downcases all http headers
 isParsable([]) -> true;
 isParsable([{Key,Val}|Rest]) ->
 	if
@@ -122,10 +114,12 @@ content(Url) ->
 
 title(Content) ->
 	T = title_(Content),
-	if
-		is_binary(T) -> binary_to_list(T);
-		true -> T
-	end.
+	T2 =
+		if
+			is_binary(T) -> binary_to_list(T);
+			true -> T
+		end,
+	normalize_title(T2).
 
 % given html content, parse out the title
 title_([_|_]=Content) ->
@@ -151,6 +145,16 @@ title_([_|_]=Content) ->
 			end
 	end.
 
+% remove any weird chars from title, especially \r and \n.
+% trim title afterwards.
+normalize_title(Title) ->
+	Nice =
+		lists:filter(
+			fun(C) -> % sanitize title contents
+				char:isalnum(C) or char:ispunct(C) or (C == 32)
+			end, Title),
+	util:trim(Nice, 32).
+
 tinyurl(Url) ->
 	Url2 = "http://tinyurl.com/api-create.php?url=" ++ Url,
 	{_Code, Content} = content(Url2),
@@ -162,20 +166,31 @@ error(Url, Code) ->
 		io_lib:format("url ~s -> ~s", [Url, Code])).
 
 % url fetch succeeded, display url, title and tinyurl
-ok(Url, _Code, Content) ->
-	Title = ircutil:dotdotdot(title(Content), 70),
-	TinyURL = tinyurl(Url),
-	TinyURL2 =
-		% don't bother tinyurl-ing if it's not much shorter
-		% also note that this will automatically reject other
-		% tinyurl-like sites, an unexpected benefit
-		if 
-			length(TinyURL) + 15 >= length(Url) -> "";
-			true -> TinyURL
-		end,
-	lists:flatten(
-		io_lib:format("url \"~s\" ~s",
-			[Title, TinyURL2])).
+ok(Url, _Code, Content, Rawtxt) ->
+	Title = title(Content),
+	io:format("urlinfo ok Title=~p Rawtxt=~p~n",
+		[Title, Rawtxt]),
+	case (Title == "") or (string:str(Rawtxt, Title) /= 0) of
+		true ->
+			% the string we parsed the url from already contains
+			% the entire URL's title; that means it is probably from
+			% another bot's search result. don't send anything.
+			nil;
+		false ->
+			Title2 = ircutil:dotdotdot(Title, 70),
+			TinyURL = tinyurl(Url),
+			TinyURL2 =
+				% don't bother tinyurl-ing if it's not much shorter
+				% also note that this will automatically reject other
+				% tinyurl-like sites, an unexpected benefit
+				if 
+					length(TinyURL) + 15 >= length(Url) -> "";
+					true -> TinyURL
+				end,
+			lists:flatten(
+				io_lib:format("url \"~s\" ~s",
+					[Title2, TinyURL2]))
+	end.
 
 % given an arbitrary string, produce a list of all
 % http urls contained within

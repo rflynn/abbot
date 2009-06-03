@@ -34,7 +34,7 @@ loop() ->
 		{help, Pid, Dst, Nick} ->
 			Pid ! {q,
 				irc:resp(Dst, Nick, Nick ++ ": " ++
-					"[\"slashdot\" | Cnt] -> display latest slashdot rss feed")
+					"[\"slashdot\" | Cnt] -> latest slashdot stories (Cnt <= 5, default 1).")
 			},
 			loop()
 	end.
@@ -75,7 +75,7 @@ ok(Pid, Dst, Nick, Cnt, Content) ->
 		Pid ! {q,
 			irc:resp(Dst, Nick,
 				lists:flatten(
-					io_lib:format("~-55s ~s",
+					io_lib:format("/. ~-55s ~s",
 						[ ircutil:dotdotdot(Title, 55), tinyurl(Url)])))
 		} || [Title,_Descr,Url] <- string:substr(Items, 1, Cnt2)
 	].
@@ -108,5 +108,4 @@ rss_items(Rss) ->
 		[ binary_to_list(hd(Guts)) || {_,_,Guts} <- M ]
 		|| M <- Meat
 	].
-
 

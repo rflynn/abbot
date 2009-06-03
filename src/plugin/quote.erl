@@ -13,13 +13,15 @@
 -import(test).
 -import(irc).
 
+-define(quote_path, "./data/quote/").
+
 test() ->
 	true.
 
 loop() ->
 	receive
-		{ act, Pid, Irc, _Msg, Dst, Nick, ["quote", Who | Search]} ->
-			quote(Pid, Irc, _Msg, Dst, Nick, ["quote", Who | Search]),
+		{ act, Pid, Irc, _Msg, Dst, Nick, ["quote", _ | _]=Txt} ->
+			quote(Pid, Irc, _Msg, Dst, Nick, Txt),
 			loop();
 		{ act, _, _, _, _, _, _ } ->
 			loop();
@@ -40,7 +42,7 @@ quote(Pid, Irc, _Msg, Dst, Nick, ["quote", Who | Search]) ->
 	if
 		not PathSafe -> Irc;
 		PathSafe ->
-			Path = "./data/quote/" ++ Someone,
+			Path = ?quote_path ++ Someone,
 			Quotes = lists:filter(
 				fun(Q) ->
 					("" == Search2) or (string:str(Q, Search2) /= 0)
@@ -60,7 +62,7 @@ quote(Pid, Irc, _Msg, Dst, Nick, ["quote", Who | Search]) ->
 
 help(Pid, Dst, Nick) ->
 	Who = % list quotefiles
-		case file:list_dir("quote") of
+		case file:list_dir(?quote_path) of
 			{ok, List} ->
 				lists:filter( % disregard dot-files, sort
 					fun(C) ->
@@ -73,8 +75,8 @@ help(Pid, Dst, Nick) ->
 	Pid ! { q,
 		[ irc:resp(Dst, Nick, Nick ++ ": " ++ Txt) || Txt <-
 			[
-				"[\"quote\", Who] -> random quote from Who",
-				"Who = [\"" ++ util:join("\",\"", Who) ++ "\"]"
+				"[\"quote\", Who | Search] -> random quote from Who, optionally containing Search",
+				"Who = [" ++ util:join(",", Who) ++ "]"
 			]
 		] }.
 

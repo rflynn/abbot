@@ -23,11 +23,11 @@ loop() ->
     { act, Pid, Irc, _, _, Nick, ["act", Chan | What] } ->
       action(Pid, Irc, Nick, Chan, What),
 			loop();
-    { act, Pid, Irc, _, _, Nick, ["join", Chan ] } ->
-      join(Pid, Irc, Nick, Chan),
+    { act, Pid, Irc, _, _, Nick, ["join" | Chans ] } ->
+      join(Pid, Irc, Nick, Chans),
 			loop();
-    { act, Pid, Irc, _, _, Nick, ["part", Chan ] } ->
-      part(Pid, Irc, Nick, Chan),
+    { act, Pid, Irc, _, _, Nick, ["part" | Chans ] } ->
+      part(Pid, Irc, Nick, Chans),
 			loop();
     { act, Pid, Irc, _, _, Nick, ["nick", NewNick] } ->
       nick(Pid, Irc, Nick, NewNick),
@@ -48,10 +48,10 @@ loop() ->
         [ irc:resp(Dst, Nick, Nick ++ ": " ++ Que)
           || Que <-
           [
-					  "[\"say\",  Chan | What] -> Say What in Chan",
-					  "[\"act\",  Chan | What] -> /me What in Chan",
-					  "[\"join\", Chan       ] -> Join Chan",
-					  "[\"part\", Chan       ] -> Leave Chan",
+					  "[\"say\", Chan | What ] -> Say What in Chan",
+					  "[\"act\", Chan | What ] -> /me What in Chan",
+					  "[\"join\" | Chas      ] -> Join Chans",
+					  "[\"part\" | Chans     ] -> Leave Chans)",
 					  "[\"nick\", NewNick    ] -> Change nick",
 					  "[\"quit\" | Snarky    ] -> Quit"
           ]
@@ -84,16 +84,16 @@ action(Pid, Irc, Nick, Chan, What) ->
       Pid ! {q, irc:privmsg(Chan, irc:action(util:j(What)))}
     end).
 
-join(Pid, Irc, Nick, Chan) ->
+join(Pid, Irc, Nick, Chans) ->
 	byperm(Irc, Nick, ["irc","join"],
 		fun() ->
-			Pid ! {q, #ircmsg{type="JOIN", rawtxt=Chan}}
+			Pid ! {q, [ #ircmsg{type="JOIN", rawtxt=Chan} || Chan <- Chans ]}
     end).
 
-part(Pid, Irc, Nick, Chan) ->
+part(Pid, Irc, Nick, Chans) ->
 	byperm(Irc, Nick, ["irc","part"],
 		fun() ->
-			Pid ! {q, #ircmsg{type="PART", rawtxt=Chan}}
+			Pid ! {q, [ #ircmsg{type="PART", rawtxt=Chan} || Chan <- Chans ]}
 		end).
 
 nick(Pid, Irc, Nick, NewNick) ->

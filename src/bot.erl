@@ -6,7 +6,7 @@
 -define(master,     "pizza_").
 -define(nick,       "abbot").
 -define(chan,       "#mod_spox").
--define(pass,       "kazaam!"). % password for changing "master" user
+-define(pass,       "kazam!"). % password for changing "master" user
 
 -module(bot).
 -author("pizza@parseerror.com").
