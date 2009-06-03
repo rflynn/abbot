@@ -20,6 +20,7 @@
 
 -record(ircconn,
 	{
+		connected = false,
 		host  = "",
     port  = 6667,
 		key		= "",						% how we maintain relationship between ircconn and ircmsg
@@ -31,7 +32,8 @@
 		pass  = "",
 		q 		= [],						% queue of msgs to send
 		state = dict:new(),		% funcall-persistent storage
-		deqt	= nil						% dequeue timer ref
+		deqt	= nil,					% dequeue timer ref
+		cont	= nil						% connection checking timer
 	}).
 
 -record(ircmsg,

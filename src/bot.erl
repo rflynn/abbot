@@ -6,7 +6,7 @@
 -define(master,     "pizza_").
 -define(nick,       "abbot").
 -define(chan,       "#mod_spox").
--define(pass,       "foobar!"). % password for changing "master" user
+-define(pass,       "kazaam!"). % password for changing "master" user
 
 -module(bot).
 -author("pizza@parseerror.com").
@@ -15,15 +15,15 @@
 		test/0,
 		go/1,
 		start/2,
-		conn/3, loop/2,
+		conn/3, loop/2, reconnt/1, reconn/1,
 		q/2, deq/2, deqt/1,
 		newnick/1
 	]).
-
+-define(reconn_interval,	10000). % reconnect check msecs
 % output queue config
--define(qinterval,  1000). % milliseconds between single-line sends
--define(burstlines, 3). % max output lines to burst at once
--define(burstsec,   5). % minimum time between multi-line bursts
+-define(deq_interval,  		  900). % line send msec
+-define(burstlines, 					3). % max output lines to burst at once
+-define(burstsec,   					5). % minimum time between multi-line bursts
 
 -include_lib("irc.hrl").
 -import(irc).
@@ -37,59 +37,12 @@ go(Where) ->
 	% trap exits. this means that when a plugin
 	% crashes, we catch its exit message and reincarnate it.
 	process_flag(trap_exit, true),
-	io:format("Loading plugins, running unit tests. Be patient.~n"),
+	io:format("Loading plugins...~n"),
 	Plugins = plugins_load(),
 	io:format("Plugins loaded.~n"),
 	State = start(Where, Plugins),
 	io:format("Started.~n"),
 	State.
-
-% find, load, test and return all available plugins
-plugins_load() ->
-	case file:list_dir("plugin") of
-		{ok, Files} ->
-			Files2 = lists:filter( % all .beam files
-				fun(F) -> string:str(F, ".beam") /= 0 end, Files),
-			Names = [ % parse prefix
-				string:substr(Filename, 1,
-					string:str(Filename, ".beam") - 1)
-						|| Filename <- Files2 ],
-			io:format("Names=~p~n", [Names]),
-			[ plugin_run(Name) || Name <- Names ];
-		_ ->
-			io:format("'plugin' directory not found. exiting.~n"),
-			exit("argh")
-		end.
-
-% given a plugin module name as a string,
-% load, unit test, spawn process and link plugin
-% and return record
-plugin_run(Name) ->
-	Atom = list_to_atom(Name),
-	case Atom:test() of
-		false ->
-			io:format("Unit tests failed, exiting.~n"),
-			exit(0);
-		true ->
-			Pid = spawn_link(Atom, loop, []),
-			{ Name, Atom, Pid }
-		end.
-
-% DeadPid crashed, search Plugins for a matching pid and
-% replace entry with new instance of plugin
-plugin_restart(Plugins, DeadPid) ->
-	io:format("Restarting Pid ~p...~n", [DeadPid]),
-	lists:map(
-		fun({Name, _Atom, Pid}=P) ->
-			if
-				Pid == DeadPid ->
-					io:format("Pid ~p was the ~s plugin, restarting...~n",
-						[DeadPid, Name]),
-					plugin_run(Name);
-				true -> P
-			end
-		end,
-		Plugins).
 
 % given a list of hosts or {host,port} destinations
 % and some plugins, launch all the connections
@@ -100,7 +53,7 @@ start(Host, Plugins) ->
 		[Host, Plugins]),
 	conn(Host, 6667, Plugins).% ++ start(Rest, Plugins).
 
-% Connect to an IRC host:port. TCP line-based.
+% one-time connection setup and launch
 conn(Host, Port, Plugins) ->
 	io:format("conn Host=~s Port=~p~n", [Host, Port]),
 	Irc = #ircconn{
@@ -111,30 +64,29 @@ conn(Host, Port, Plugins) ->
 		state=irc_state_load(),
 		user=#ircsrc{
 			nick=?nick, user="blah", host="blah"}},
-	case gen_tcp:connect(Host, Port, [{packet, line}]) of
-		{ok, Sock} ->
-			io:format("Connected~n"),
-			Nick = (Irc#ircconn.user)#ircsrc.nick,
-			Irc2 = Irc#ircconn{sock=Sock},
-			% NOTE: q-ing these together allows them to burst
-			Irc3 = bot:q(Irc2, 
-				[ irc:nick(Nick),
-					irc:user(Irc2) ]),
-			Deqt =
-				timer:apply_interval(?qinterval, bot, deqt, [self()]),
-			Irc4 = Irc3#ircconn{deqt=Deqt},
-			bot:loop(Irc4, Plugins);
-		{error, Why} ->
-			io:format("Error: ~s~n", [Why]),
-			% TODO: pause before reconnecting
-			conn(Host, Port, Plugins) % try harder. try again.
-	end.
+	Pid = self(),
+	Reconnt = timer:apply_interval(
+		?reconn_interval, bot, reconnt, [Pid]),
+	Deqt = timer:apply_interval(
+		?deq_interval, bot, deqt, [Pid]),
+	Irc2 = Irc#ircconn{cont=Reconnt, deqt=Deqt},
+	Irc3 = reconn(Irc2),
+	loop(Irc3, Plugins).
+
+% signal loop to check connection
+reconnt(Loop_Pid) ->
+	Loop_Pid ! conn.
 
 % API calls to modify the state of the Irc object;
 % made from the dequeue timer, from the plugins
 % and possibly from the shell
 loop(Irc, Plugins) ->
 	receive
+		conn ->
+			% attempt to connect if we're not already
+			Irc2 = Irc,
+			%Irc2 = bot:reconn(Irc),
+			loop(Irc2, Plugins);
 		deq ->
 			%io:format("loop {deq}~n"),
 			Irc2 = bot:deq(Irc, Irc#ircconn.q),
@@ -145,6 +97,7 @@ loop(Irc, Plugins) ->
 			Irc2 = bot:q(Irc, Msg),
 			loop(Irc2, Plugins);
 		{setstate, Key, Val} ->
+			io:format("Exiting...~n"),
 			% plugin req to update Irc state dict
 			io:format("loop {setstate, Key=~p, Val=~p}~n",
 				[Key, Val]),
@@ -160,10 +113,8 @@ loop(Irc, Plugins) ->
 			io:format("loop {save}~n"),
 			irc_state_save(Irc),
 			loop(Irc, Plugins);
-		{'EXIT', Pid, Reason} ->
+		{'EXIT', Pid, _Why} ->
 			% catch plugin reloads/crashes
-			io:format("loop {'EXIT', Pid=~p Reason=~p}~n",
-				[Pid, Reason]),
 			Plugins2 = plugin_restart(Plugins, Pid),
 			loop(Irc, Plugins2);
 		{plugins, reload} ->
@@ -177,27 +128,53 @@ loop(Irc, Plugins) ->
 			Irc4 = react(Irc3, Msg, Plugins),
 			loop(Irc4, Plugins);
 		{tcp_closed, _Sock} ->
+			io:format("~s:~p closed~n",
+				[Irc#ircconn.host, Irc#ircconn.port]),
 			irc_state_save(Irc),
-			io:format("closed! reconnecting...~n"),
-			loop(Irc, Plugins);
+			Irc2 = Irc#ircconn{connected=false},
+			loop(Irc2, Plugins);
 		{tcp_error, _Sock, Why} ->
+			io:format("~s:~p err ~s~n",
+				[Irc#ircconn.host, Irc#ircconn.port, Why]),
 			irc_state_save(Irc),
-			io:format("error: ~s!~n", [Why]),
-			loop(Irc, Plugins);
+			Irc2 = Irc#ircconn{connected=false},
+			loop(Irc2, Plugins);
 		quit ->
+			io:format("Exiting...~n"),
 			irc_state_save(Irc),
-			Sock = Irc#ircconn.sock,
-			Deqt = Irc#ircconn.deqt,
-			io:format("[~w] Cancelling timer ~w...~n",
-				[Sock, Deqt]),
-			timer:cancel(Deqt),
-			io:format("[~w] Exiting...~n", [Sock]),
-			gen_tcp:close(Sock),
+			timer:cancel(Irc#ircconn.deqt),
+			timer:cancel(Irc#ircconn.cont),
+			gen_tcp:close(Irc#ircconn.sock),
 			exit(stopped);
-		Unmatched ->
-			io:format("bot loop() received uncaught ! ~p~n",
-				[Unmatched]),
+		Foo ->
+			io:format("bot loop() uncaught ! ~p~n", [Foo]),
 			loop(Irc, Plugins)
+	end.
+
+% check that Irc.connected is true, if not, reconnect
+reconn(Irc) ->
+	io:format("reconn connected=~p~n", [Irc#ircconn.connected]),
+	if
+		not Irc#ircconn.connected ->
+			doreconn(Irc);
+		true ->
+			Irc
+	end.
+
+% attempt reconnect
+doreconn(Irc) ->
+	Host = Irc#ircconn.host,
+	Port = Irc#ircconn.port,
+	io:format("~s:~p con~n", [Host, Port]),
+	case gen_tcp:connect(Host, Port, [{packet, line}]) of
+		{ok, Sock} ->
+			io:format("~s:~p connected!~n", [Host, Port]),
+			Irc2 = Irc#ircconn{connected=true, sock=Sock},
+			Nick = (Irc2#ircconn.user)#ircsrc.nick,
+			bot:q(Irc2, [ irc:nick(Nick), irc:user(Irc2) ]);
+		{error, Why} ->
+			io:format("~s:~p err ~s~n", [Host, Port, Why]),
+			Irc
 	end.
 
 % input handling; most of the stuff here is IRC
@@ -427,6 +404,52 @@ irc_state_save(Irc) ->
 			io:format("Error saving state: ~p~n", [Why]),
 			false
 		end.
+
+% find, load, test and return all available plugins
+plugins_load() ->
+	case file:list_dir("plugin") of
+		{ok, Files} ->
+			Files2 = lists:filter( % all .beam files
+				fun(F) -> string:str(F, ".beam") /= 0 end, Files),
+			Names = [ % parse prefix
+				string:substr(Filename, 1,
+					string:str(Filename, ".beam") - 1)
+						|| Filename <- Files2 ],
+			io:format("Plugins=~p~n", [Names]),
+			[ plugin_run(Name) || Name <- Names ];
+		_ ->
+			io:format("'plugin' directory not found. exiting.~n"),
+			exit(whereareyou)
+		end.
+
+% given a plugin module name as a string,
+% load, unit test, spawn process and link plugin
+% and return record
+plugin_run(Name) ->
+	Atom = list_to_atom(Name),
+	case Atom:test() of
+		false ->
+			io:format("Unit tests failed, exiting.~n"),
+			exit(0);
+		true ->
+			Pid = spawn_link(Atom, loop, []),
+			{ Name, Atom, Pid }
+		end.
+
+% DeadPid crashed, search Plugins for a matching pid and
+% replace entry with new instance of plugin
+plugin_restart(Plugins, DeadPid) ->
+	lists:map(
+		fun({Name, _Atom, Pid}=P) ->
+			if
+				Pid == DeadPid ->
+					io:format("Pid ~p was the ~s plugin, restarting...~n",
+						[DeadPid, Name]),
+					plugin_run(Name);
+				true -> P
+			end
+		end,
+		Plugins).
 
 test() ->
 	test:unit(bot,
