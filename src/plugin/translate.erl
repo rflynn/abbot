@@ -6,7 +6,10 @@
 -export(
 	[
 		test/0,
-		loop/0
+		loop/0,
+		charswap/4,
+		en_aol/1,
+		aol_en/1
 	]).
 
 -include_lib("../irc.hrl").
@@ -40,6 +43,21 @@ loop() ->
 				]},
 			loop()
 	end.
+
+xl(Pid, Msg, Dst, Nick, "en", "engrish", Txt_) ->
+	Txt = util:j(Txt_),
+	Result = charswap(Txt, [], $l, $r),
+	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Result) };
+
+xl(Pid, Msg, Dst, Nick, "en", "aol", Txt_) ->
+	Txt = util:j(Txt_),
+	Result = en_aol(Txt),
+	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Result) };
+
+xl(Pid, Msg, Dst, Nick, "aol", "en", Txt_) ->
+	Txt = util:j(Txt_),
+	Result = aol_en(Txt),
+	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Result) };
 
 xl(Pid, Msg, Dst, Nick, From, To, Txt_) ->
 	Txt = util:j(Txt_),
@@ -128,3 +146,63 @@ langs() ->
 		{ "zh", "Chinese-simp"	},
 		{ "zt", "Chinese"				}
 	].
+
+% utility functions for silly easter eggs
+
+charswap([], Wr, _, _) -> Wr;
+charswap([A|Rd], Wr, A, B) ->
+	charswap(Rd, Wr ++ [B], A, B);
+charswap([B|Rd], Wr, A, B) ->
+	charswap(Rd, Wr ++ [A], A, B);
+charswap("City" ++ Rd, Wr, A, B) ->
+	charswap(Rd, Wr ++ "Shitty", A, B);
+charswap("city" ++ Rd, Wr, A, B) ->
+	charswap(Rd, Wr ++ "shitty", A, B);
+charswap([X|Rd], Wr, A, B) ->
+	charswap(Rd, Wr ++ [X], A, B).
+
+en_aol(Str) -> en_aol(string:to_upper(Str), []).
+en_aol([],      Wr) -> Wr ++ "!!!1";
+en_aol([$A|Rd], Wr) -> en_aol(Rd, Wr ++ [$@]);
+en_aol([$B|Rd], Wr) -> en_aol(Rd, Wr ++ [$|, $3]);
+en_aol([$I|Rd], Wr) -> en_aol(Rd, Wr ++ [$1]);
+en_aol([$K|Rd], Wr) -> en_aol(Rd, Wr ++ [$|, $<]);
+en_aol([$O|Rd], Wr) -> en_aol(Rd, Wr ++ [$0]);
+en_aol([$S|Rd], Wr) -> en_aol(Rd, Wr ++ [$$]);
+en_aol("the" ++ Rd, Wr)	-> en_aol(Rd, Wr ++ "D@");
+en_aol("too" ++ Rd, Wr)	-> en_aol(Rd, Wr ++ "2");
+en_aol("to"  ++ Rd, Wr)	-> en_aol(Rd, Wr ++ "2");
+en_aol("you"  ++ Rd, Wr)	-> en_aol(Rd, Wr ++ "U");
+en_aol("haha" ++ Rd, Wr)	-> en_aol(Rd, Wr ++ "LULZ!");
+en_aol("very" ++ Rd, Wr) -> en_aol(Rd, Wr ++ "WAI");
+en_aol("way"  ++ Rd, Wr)	-> en_aol(Rd, Wr ++ "WAI");
+en_aol([R|Rd], []) -> en_aol(Rd, [R]);
+en_aol([R|Rd], Wr) -> en_aol(Rd, Wr ++ [R]).
+
+aol_en(Str) -> aol_en(string:to_lower(Str), []).
+aol_en([],      Wr) -> Wr;
+aol_en([$!|Rd], Wr) -> aol_en(Rd, Wr);
+aol_en([$1|Rd], Wr) -> aol_en(Rd, Wr);
+aol_en("???" ++ Rd, Wr)	-> aol_en(Rd, Wr ++ "?");
+aol_en([$?|Rd], Wr) 		-> aol_en(Rd, Wr);
+aol_en(" da " ++ Rd, Wr)-> aol_en(Rd, Wr ++ " the ");
+aol_en("omg" ++ Rd, Wr)-> aol_en(Rd, Wr ++ "oh my");
+aol_en("helo" ++ Rd, Wr)-> aol_en(Rd, Wr ++ "hello");
+aol_en("lulz" ++ Rd, Wr)-> aol_en(Rd, Wr ++ "haha");
+aol_en("wtf" ++ Rd, Wr)	-> aol_en(Rd, Wr);
+aol_en("lol" ++ Rd, Wr)	-> aol_en(Rd, Wr ++ "haha");
+aol_en("ur " ++ Rd, Wr)	-> aol_en(Rd, Wr ++ "your ");
+aol_en(" u " ++ Rd, Wr)	-> aol_en(Rd, Wr ++ " you ");
+aol_en(" u!" ++ Rd, Wr)	-> aol_en(Rd, Wr ++ " you");
+aol_en("u?" ++ Rd, Wr)	-> aol_en(Rd, Wr ++ "you?");
+aol_en("r " ++ Rd, Wr)	-> aol_en(Rd, Wr ++ "are ");
+aol_en(" wai" ++ Rd, Wr)	-> aol_en(Rd, Wr ++ " way");
+aol_en("i m " ++ Rd, Wr)	-> aol_en(Rd, Wr ++ "i am ");
+aol_en("awsum" ++ Rd, Wr)	-> aol_en(Rd, Wr ++ "awesome");
+aol_en("fien" ++ Rd, Wr)	-> aol_en(Rd, Wr ++ "fine");
+aol_en([R|Rd], []) -> aol_en(Rd, [R]);
+aol_en([R|Rd], Wr) -> aol_en(Rd, Wr ++ [R]).
+
+% "HELO HOW R U??!?! WTF IM FIEN!11!1!11 WTF"
+% "OMG I M SO FCKIG AWSUM!!!!!1 CUM WURSHP MEE BCH!!!!!1" 
+

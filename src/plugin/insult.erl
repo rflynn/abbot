@@ -44,8 +44,7 @@ loop() ->
 				[ irc:resp(Dst, Nick, Nick ++ ": " ++ Txt) || Txt <-
 						[ "[\"insult\"] -> insult yourself",
 							"[\"insult\", Who] -> insult Who",
-							"[\"insult\", Who, \"mom\"] -> insult Who's momma",
-							"[\"insult\", Who, \"momma\"] -> insult Who's momma"
+							"[\"insult\", Who, \"mom\"] -> insult Who's momma"
 						]
 				] },
 			loop()
