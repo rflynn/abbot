@@ -12,6 +12,7 @@
 -include_lib("../irc.hrl").
 -import(test).
 -import(irc).
+-import(cgi).
 
 -define(timeout, 5000).
 -define(babelfish_url, "http://babelfish.yahoo.com/translate_txt").
@@ -21,8 +22,8 @@ test() ->
 
 loop() ->
 	receive
-		{ act, Pid, _Irc, _, Dst, Nick, ["translate", FromLang, ToLang | Txt]} ->
-			xl(Pid, Dst, Nick, FromLang, ToLang, Txt),
+		{ act, Pid, _Irc, Msg, Dst, Nick, ["translate", FromLang, ToLang | Txt]} ->
+			xl(Pid, Msg, Dst, Nick, FromLang, ToLang, Txt),
 			loop();
 		%{ act, Pid, Irc, _, Dst, Nick, ["translate", "attach", Who, FromLang, ToLang]} ->
 		%	attach(Pid, Irc, Dst, Nick, Who, FromLang, ToLang),
@@ -33,14 +34,14 @@ loop() ->
 			Pid ! {q,
         [ irc:resp(Dst, Nick, Nick ++ ": " ++ Que) || Que <-
           [ "[\"translate\", From, To | Txt ] -> Translate Txt From language To language",
-          	"[\"translate\", \"attach\", Who, From, To] -> Automatically Translate To/From for Who",
+          	%"[\"translate\", \"attach\", Who, From, To] -> Automatically Translate To/From for Who",
             "Langs = [" ++ util:join(",", [ Short || {Short,_} <- langs() ]) ++ "]"
 					]
 				]},
 			loop()
 	end.
 
-xl(Pid, Dst, Nick, From, To, Txt_) ->
+xl(Pid, Msg, Dst, Nick, From, To, Txt_) ->
 	Txt = util:j(Txt_),
 	io:format("translate From=~p To=~p Txt_=~p Txt=~p~n",
 		[From, To, Txt_, Txt]),
@@ -51,29 +52,29 @@ xl(Pid, Dst, Nick, From, To, Txt_) ->
 			Pid ! {q, irc:resp(Dst, Nick,
 				lists:flatten(
 					io_lib:format("translate -> ~s", [Code])))};
-		_ -> ok(Pid, Dst, Nick, Content)
+		_ -> ok(Pid, Msg, Dst, Nick, Content)
 	end.
 
 content(From, To, Txt) ->
-	Fields =
+	Post =
 		[
 		 { "ei",			"ISO-8859-1"			},
   	 { "doit",	 	"done"    				},
   	 { "fr",			"bf-res"  				},
   	 { "intl",		"1"       				},
   	 { "tt",			"urltext" 				},
-			% FIXME: lack of encoding user-supplied data considered harmful
   	 { "lp",			From ++ "_" ++ To	},	
   	 { "trtext",	Txt       				},
   	 { "inp_btn",	"Translate"				}],
-	io:format("Header Fields=~p~n", [Fields]),
+	io:format("Header Post=~p~n", [Post]),
 	case http:request(post,
 		{
 			?babelfish_url,																				% URL
 			[{ "Referer", ?babelfish_url }, 											% Headers
 			 { "User-Agent", "Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.0)" }],
 			"application/x-www-form-urlencoded",									% Encoding
-			util:join("&", [ K ++ "=" ++ V || {K,V} <- Fields ])	% POST fields
+				util:join("&",
+					[ K ++ "=" ++ cgi:url_encode(V) || {K,V} <- Post ])	% POST fields
 		},
 		[{timeout, ?timeout}],
 		[{body_format, binary}]
@@ -82,10 +83,10 @@ content(From, To, Txt) ->
 		{error, Why} -> {error, Why}
 		end.
 
-ok(Pid, Dst, Nick, Contents) ->
+ok(Pid, Msg, Dst, Nick, Contents) ->
 	Result = result(Contents),	% FIXME: normalize result
 															% NOTE: result may be in crazy different char set
-	Pid ! {q, irc:resp(Dst, Nick, Result) }.
+	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Result) }.
 
 result([]) -> [];
 result(Contents) ->

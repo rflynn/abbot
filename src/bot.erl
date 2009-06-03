@@ -92,9 +92,18 @@ loop(Irc, Plugins) ->
 			Irc2 = bot:deq(Irc, Irc#ircconn.q),
 			loop(Irc2, Plugins);
 		{q, Msg} ->
+			% direct (original) output path, no
+			% pipelining
 			io:format("loop {q, Msg=~p}~n", [Msg]),
 			% plugin req to queue an output msg
 			Irc2 = bot:q(Irc, Msg),
+			loop(Irc2, Plugins);
+		{pipe, Req, Resp} ->
+			% alternative path to {q...} that allows piping
+			% between commands, i.e. insult | translate en es
+			% this chains the output of each plugin into the input of the next
+			io:format("loop {pipe, Req=~p Resp=~p}~n", [Req, Resp]),
+			Irc2 = pipe_run(Irc, Plugins, Req, Resp),
 			loop(Irc2, Plugins);
 		{setstate, Key, Val} ->
 			io:format("Exiting...~n"),
@@ -110,7 +119,7 @@ loop(Irc, Plugins) ->
 			loop(Irc2, Plugins);
 		save ->
 			% serialize and save bot state to disk
-			io:format("loop {save}~n"),
+			io:format("loop save~n"),
 			irc_state_save(Irc),
 			loop(Irc, Plugins);
 		{'EXIT', Pid, _Why} ->
@@ -124,9 +133,9 @@ loop(Irc, Plugins) ->
 			io:format("<<< ~s", [Data]),
 			Irc2 = Irc#ircconn{sock=Sock},
 			Msg = irc:parse(Irc2, Data),
-			Irc3 = ircin(Irc2, Msg),
-			Irc4 = react(Irc3, Msg, Plugins),
-			loop(Irc4, Plugins);
+			Msg2 = pipe_parse(Msg),
+			Irc3 = react(Irc2, Msg2, Plugins),
+			loop(Irc3, Plugins);
 		{tcp_closed, _Sock} ->
 			io:format("~s:~p closed~n",
 				[Irc#ircconn.host, Irc#ircconn.port]),
@@ -150,6 +159,45 @@ loop(Irc, Plugins) ->
 			io:format("bot loop() uncaught ! ~p~n", [Foo]),
 			loop(Irc, Plugins)
 	end.
+
+% split Msg's rawtxt member into pipelines, and
+% append them to msg's pipeline list
+pipe_parse(#ircmsg{rawtxt=[]}=Msg) ->
+	Msg;
+pipe_parse(#ircmsg{rawtxt=Rawtxt}=Msg) ->
+	[ First | Rest ] =
+		[ util:trim(P) || P <- string:tokens(Rawtxt, "|") ],
+	Msg2 = Msg#ircmsg{
+		txt = string:tokens(First, " "),
+		rawtxt=First,
+		pipeline=Rest
+	},
+	Msg2.
+
+% evaluate a pipelined message; feeding the output
+% of each plugin into the input of the next one
+% until there are none left, and then output
+% the msg
+pipe_run(Irc, _, #ircmsg{pipeline=[]}, #ircmsg{}=Resp) ->
+	bot:q(Irc, Resp);
+pipe_run(Irc, _, _, []) ->
+	Irc;
+pipe_run(Irc, Plugins, Req, #ircmsg{}=Resp) ->
+	[H|T] = Req#ircmsg.pipeline,
+	Rawtxt2 = H ++ " " ++ Resp#ircmsg.rawtxt,
+	Req2 = Req#ircmsg{
+		% pass the output of the response as the suffix
+		% of the next request. plugins must implement a command
+		% structure that allows this
+		rawtxt = Rawtxt2,
+		txt = string:tokens(Rawtxt2, " "),
+		pipeline = T
+	},
+	react(Irc, Req2, Plugins);
+pipe_run(Irc, Plugins, Req, [Resp|Rest]) ->
+	Irc2 = pipe_run(Irc, Plugins, Req, Resp),
+	pipe_run(Irc2, Plugins, Req, Rest).
+
 
 % check that Irc.connected is true, if not, reconnect
 reconn(Irc) ->
@@ -228,11 +276,13 @@ privmsg(
 	}=Msg,
 	Plugins) ->
 	Me = (Irc#ircconn.user)#ircsrc.nick,
+	First2 = util:rtrim(First, $:),
+	First3 = util:rtrim(First2, $,),
 	{Msg2, Txt} =
 		if % are you talking to me? i don't see anyone else...
 			Dst == Me ->
 				{Msg, All};
-			First == Me ->
+			First3 == Me ->
 				% chan privmsg where my nick is the first word
 				Msg3 = ircutil:ltrim_nick(Msg, Rawtxt, Me),
 				{Msg3, Rest};
@@ -302,7 +352,7 @@ deqt(Loop_Pid) ->
 % implements bursting cfged via ircconn ircqopt{}
 deq(Irc, []) ->
 	Irc;
-deq(Irc, [_|_]=Q) ->
+deq(Irc, Q) ->
 	St = irc:state(Irc, deq,
 		#ircqopt{
 			burstlines = ?burstlines,
@@ -333,26 +383,12 @@ sendburst(Irc, Cnt) ->
 	Irc3 = Irc2#ircconn{q=T},
 	sendburst(Irc3, Cnt - 1).
 
-% wrapper for all incoming messages
-ircin(Irc, #ircmsg{}=Msg) ->
-	irctypecnt(Irc, Msg).
-
 % gen_tcp:send wrapper for #ircmsg
 send(Irc, Msg) ->
 	Data = irc:str(Msg),
 	io:format(">>> ~s", [Data]),
 	gen_tcp:send(Irc#ircconn.sock, Data),
-	ircout(Irc, Msg).
-
-% wrapper for all outgoing messages
-ircout(Irc, #ircmsg{}=Msg) ->
-	irctypecnt(Irc, Msg).
-
-% increment type by count
-irctypecnt(Irc, #ircmsg{type=Type}=_Msg) ->
-	D = irc:state(Irc, irctype, dict:new()),
-	D2 = dict:update_counter(Type, 1, D),
-	irc:setstate(Irc, irctype, D2).
+	Irc.
 
 newnick([]) ->
 	"_";
@@ -409,11 +445,12 @@ irc_state_save(Irc) ->
 plugins_load() ->
 	case file:list_dir("plugin") of
 		{ok, Files} ->
+			Ext = code:objfile_extension(), % ".beam"
 			Files2 = lists:filter( % all .beam files
-				fun(F) -> string:str(F, ".beam") /= 0 end, Files),
+				fun(F) -> string:str(F, Ext) /= 0 end, Files),
 			Names = [ % parse prefix
 				string:substr(Filename, 1,
-					string:str(Filename, ".beam") - 1)
+					string:str(Filename, Ext) - 1)
 						|| Filename <- Files2 ],
 			io:format("Plugins=~p~n", [Names]),
 			[ plugin_run(Name) || Name <- Names ];

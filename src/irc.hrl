@@ -45,6 +45,7 @@
 		dst     = "",	  		% where msg is headed; either AUTH, a nick (yourself) or a channel
 		txt     = [],				% spoken contents, if any
     rawtxt  = "",   		% unparsed contents of 'txt'
-    raw     = ""    		% unparsed msg contents
+    raw     = "",    		% unparsed msg contents
+		pipeline = []
 	}).
 

@@ -31,8 +31,8 @@ test() ->
 % receive loop
 loop() ->
 	receive
-		{act, Pid, _Irc, _, Dst, Nick, ["ruby" | Code]} ->
-			act(Pid, Dst, Nick, Code),
+		{act, Pid, _Irc, Msg, Dst, Nick, ["ruby" | Code]} ->
+			act(Pid, Msg, Dst, Nick, Code),
 			loop();
 		{act, _, _, _, _, _, _ } ->
 			loop();
@@ -50,10 +50,10 @@ loop() ->
 	end.
 
 % evaluate the input as ruby source code
-act(Pid, Dst, Nick, Code) ->
+act(Pid, Msg, Dst, Nick, Code) ->
 	Source = util:j(Code),
 	Output = ruby:eval(Source), % we get at most one line of output
-	Pid ! {q, irc:resp(Dst, Nick, Output)}.
+	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Output)}.
 
 eval(Ruby) ->
   Run = "./exec /usr/bin/ruby \"-e puts Thread.start{ \\$SAFE=4; " ++ escape(Ruby) ++ " }.join.value.inspect\"",

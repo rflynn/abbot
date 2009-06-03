@@ -20,29 +20,29 @@ test() ->
 loop() ->
 	receive
 		% dict get
-		{act, Pid, Irc, _, Dst, Nick, ["how", "is" | Term]} ->
-			dict_get(Pid, Irc, Dst, Nick, "is", Term),
+		{act, Pid, Irc, Msg, Dst, Nick, ["how", "is" | Term]} ->
+			dict_get(Pid, Irc, Msg, Dst, Nick, "is", Term),
 			loop();
-		{act, Pid, Irc, _, Dst, Nick, ["what", "is" | Term]} ->
-			dict_get(Pid, Irc, Dst, Nick, "is", Term),
+		{act, Pid, Irc, Msg, Dst, Nick, ["what", "is" | Term]} ->
+			dict_get(Pid, Irc, Msg, Dst, Nick, "is", Term),
 			loop();
-		{act, Pid, Irc, _, Dst, Nick, ["who", "is" | Term]} ->
-			dict_get(Pid, Irc, Dst, Nick, "is", Term),
+		{act, Pid, Irc, Msg, Dst, Nick, ["who", "is" | Term]} ->
+			dict_get(Pid, Irc, Msg, Dst, Nick, "is", Term),
 			loop();
-		{act, Pid, Irc, _, Dst, Nick, ["how", "are" | Term]} ->
-			dict_get(Pid, Irc, Dst, Nick, "are", Term),
+		{act, Pid, Irc, Msg, Dst, Nick, ["how", "are" | Term]} ->
+			dict_get(Pid, Irc, Msg, Dst, Nick, "are", Term),
 			loop();
-		{act, Pid, Irc, _, Dst, Nick, ["what", "are" | Term]} ->
-			dict_get(Pid, Irc, Dst, Nick, "are", Term),
+		{act, Pid, Irc, Msg, Dst, Nick, ["what", "are" | Term]} ->
+			dict_get(Pid, Irc, Msg, Dst, Nick, "are", Term),
 			loop();
-		{act, Pid, Irc, _, Dst, Nick, ["who", "are" | Term]} ->
-			dict_get(Pid, Irc, Dst, Nick, "is", Term),
+		{act, Pid, Irc, Msg, Dst, Nick, ["who", "are" | Term]} ->
+			dict_get(Pid, Irc, Msg, Dst, Nick, "is", Term),
 			loop();
-		{act, Pid, Irc, _, Dst, Nick, ["what", "am" | Term]} ->
-			dict_get(Pid, Irc, Dst, Nick, "are", Term),
+		{act, Pid, Irc, Msg, Dst, Nick, ["what", "am" | Term]} ->
+			dict_get(Pid, Irc, Msg, Dst, Nick, "are", Term),
 			loop();
-		{act, Pid, Irc, _, Dst, Nick, ["who", "am" | Term]} ->
-			dict_get(Pid, Irc, Dst, Nick, "is", Term),
+		{act, Pid, Irc, Msg, Dst, Nick, ["who", "am" | Term]} ->
+			dict_get(Pid, Irc, Msg, Dst, Nick, "is", Term),
 			loop();
 		% dict store
 		{act, Pid, Irc, _, _, Nick, [Term, "is" | Rest]} ->
@@ -93,11 +93,11 @@ dict_set_(Pid, Irc, Term, Rest) ->
 
 % retrieve Key -> Val mapping in dictionary
 % NOTE: translate between "you" <-> "i", i.e. "what are you?" -> "i am ..."
-dict_get(Pid, Irc, Dst, Nick, _Connect, ["you?"]) ->
-	dict_get(Pid, Irc, Dst, Nick, "am", ["i"]);
-dict_get(Pid, Irc, Dst, Nick, _Connect, ["you"]) ->
-	dict_get(Pid, Irc, Dst, Nick, "am", ["i"]);
-dict_get(Pid, Irc, Dst, Nick, Connect, Term) ->
+dict_get(Pid, Irc, Msg, Dst, Nick, _Connect, ["you?"]) ->
+	dict_get(Pid, Irc, Msg, Dst, Nick, "am", ["i"]);
+dict_get(Pid, Irc, Msg, Dst, Nick, _Connect, ["you"]) ->
+	dict_get(Pid, Irc, Msg, Dst, Nick, "am", ["i"]);
+dict_get(Pid, Irc, Msg, Dst, Nick, Connect, Term) ->
 	Is = irc:state(Irc, is, dict:new()),
 	Term2 = dict_term(Term),
 	case dict:find(Term2, Is) of
@@ -106,7 +106,7 @@ dict_get(Pid, Irc, Dst, Nick, Connect, Term) ->
 			Answer = Term2 ++ " " ++ Connect ++ " " ++ X,
 			io:format("dict_get Term2=~p Answer=~p~n",
 				[Term2, Answer]),
-			Pid ! { q, irc:resp(Dst, Nick, Nick ++ ": " ++ Answer) }
+			Pid ! { pipe, Msg, irc:resp(Dst, Nick, Nick ++ ": " ++ Answer) }
 	end.
 
 % 

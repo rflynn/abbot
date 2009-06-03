@@ -12,11 +12,17 @@
 -include_lib("../irc.hrl").
 -import(test).
 -import(irc).
-
--define(quote_path, "./data/quote/").
+-import(util).
 
 test() ->
 	true.
+
+quote_path() ->
+	quote_path("").
+quote_path(File) ->
+	Where = util:relpath("quote.erl", "data/quote/") ++ File,
+	io:format("quote_path(~p) -> ~p~n", [File, Where]),
+	Where.
 
 loop() ->
 	receive
@@ -42,7 +48,7 @@ quote(Pid, Irc, _Msg, Dst, Nick, ["quote", Who | Search]) ->
 	if
 		not PathSafe -> Irc;
 		PathSafe ->
-			Path = ?quote_path ++ Someone,
+			Path = quote_path(Someone),
 			Quotes = lists:filter(
 				fun(Q) ->
 					("" == Search2) or (string:str(Q, Search2) /= 0)
@@ -62,7 +68,7 @@ quote(Pid, Irc, _Msg, Dst, Nick, ["quote", Who | Search]) ->
 
 help(Pid, Dst, Nick) ->
 	Who = % list quotefiles
-		case file:list_dir(?quote_path) of
+		case file:list_dir(quote_path()) of
 			{ok, List} ->
 				lists:filter( % disregard dot-files, sort
 					fun(C) ->

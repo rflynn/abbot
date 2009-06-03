@@ -18,8 +18,8 @@
 
 loop() ->
 	receive
-		{ act, Pid, _Irc, #ircmsg{rawtxt="erl " ++ Code}, Dst, Nick, _ } ->
-			act(Pid, Dst, Nick, Code),
+		{ act, Pid, _Irc, #ircmsg{rawtxt="erl " ++ Code}=Msg, Dst, Nick, _ } ->
+			act(Pid, Msg, Dst, Nick, Code),
 			loop();
 		{ act, _, _, _, _, _, _ } ->
 			loop();
@@ -32,13 +32,13 @@ loop() ->
 	end.
 
 % evaluate the input as erlang 
-act(Pid, Dst, Nick, Code) ->
+act(Pid, Msg, Dst, Nick, Code) ->
 	io:format("Code=~p~n", [Code]),
 	RespLines = exec(Code),
 	Resps = % build an ircmsg for each line
 		lists:map(fun(Line) -> irc:resp(Dst, Nick, Line) end,
 			RespLines),
-	Pid ! {q, Resps}.
+	Pid ! {pipe, Msg, Resps}.
 
 % execute erlang source code and return [ "results" ]
 % TODO: possibly make size of output configurable...

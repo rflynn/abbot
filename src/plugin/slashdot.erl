@@ -76,7 +76,7 @@ ok(Pid, Dst, Nick, Cnt, Content) ->
 			irc:resp(Dst, Nick,
 				lists:flatten(
 					io_lib:format("/. ~-55s ~s",
-						[ ircutil:dotdotdot(Title, 55), tinyurl(Url)])))
+						[ ircutil:dotdotdot(cgi:entity_decode(Title), 55), tinyurl(Url)])))
 		} || [Title,_Descr,Url] <- string:substr(Items, 1, Cnt2)
 	].
 

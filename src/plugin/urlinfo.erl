@@ -17,8 +17,8 @@
 
 loop() ->
 	receive
-		{act, Pid, _Irc, #ircmsg{rawtxt=Rawtxt}, Dst, Nick, ["url", Url ]} ->
-			act(Pid, Rawtxt, Dst, Nick, Url),
+		{act, Pid, _Irc, #ircmsg{rawtxt=Rawtxt}=Msg, Dst, Nick, ["url", Url ]} ->
+			act(Pid, Msg, Rawtxt, Dst, Nick, Url),
 			loop();
 		{act, Pid, _Irc, #ircmsg{rawtxt=Rawtxt}, Dst, _Nick, _Txt} ->
 			scan_for_urls(Pid, Rawtxt, Dst),
@@ -34,11 +34,11 @@ loop() ->
 	end.
 
 % 
-act(Pid, Rawtxt, Dst, Nick, Url) ->
+act(Pid, Msg, Rawtxt, Dst, Nick, Url) ->
 	Output = info(Url, Rawtxt),
 	if
 		Output /= nil ->
-			Pid ! { q, irc:resp(Dst, Nick, Output) };
+			Pid ! { pipe, Msg, irc:resp(Dst, Nick, Output) };
 		true -> nil
 	end.
 
@@ -177,7 +177,7 @@ ok(Url, _Code, Content, Rawtxt) ->
 			% another bot's search result. don't send anything.
 			nil;
 		false ->
-			Title2 = ircutil:dotdotdot(Title, 70),
+			Title2 = ircutil:dotdotdot(cgi:entity_decode(Title), 70),
 			TinyURL = tinyurl(Url),
 			TinyURL2 =
 				% don't bother tinyurl-ing if it's not much shorter

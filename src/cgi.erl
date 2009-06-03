@@ -4,9 +4,17 @@
 -module(cgi).
 -author("pizza@parseerror.com").
 -export([
+		test/0,
 		entity_decode/1,
 		url_encode/1
 	]).
+-import(test).
+
+test() ->
+	test:unit(cgi,
+		[
+			{ url_encode, test_url_encode() }
+		]).
 
 entity_decode(En) -> entity_decode(En, []).
 entity_decode([], Un) -> Un;
@@ -27,4 +35,15 @@ url_encode("&" ++ De, En) -> url_encode(De, En ++ "&amp;");
 url_encode("=" ++ De, En) -> url_encode(De, En ++ "=");
 url_encode("/" ++ De, En) -> url_encode(De, En ++ "/");
 url_encode([D|De],    En) -> url_encode(De, En ++ [D]).
+
+test_url_encode() ->
+	[
+		{ [ "" ],	"" },
+		{ [ " " ],	"+" },
+		{ [ "a" ],	"a" },
+		{ [ "ab" ],	"ab" },
+		{ [ "a b" ],	"a+b" },
+		{ [ "a & b" ],	"a+&amp;+b" },
+		{ [ "hello&there" ],	"hello&amp;there" }
+	].
 

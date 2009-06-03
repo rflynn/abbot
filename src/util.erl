@@ -6,11 +6,12 @@
 -author("pizza@parseerror.com").
 -export(
 	[
+		relpath/2,
 		min/2,
 		join/2, j/1,
 		rtrim/2, rtrim/1,
 		ltrim/3, ltrim/2, ltrim/1,
-		trim/2,
+		trim/2, trim/1,
 		split/3,
 		tokens/3,
 		show/1,
@@ -36,6 +37,15 @@ test() ->
 			{ split, 		test_split()			},
 			{ tokens,		test_tokens()			}
 		]).
+
+% construct an absolute path from a relative one
+% used like so: realpath("foo.erl", "rel/a/tive")
+relpath(File, Path) ->
+	case code:where_is_file(File) of
+		non_existing -> Path;
+		Where ->
+			string:substr(Where, 1, string:rstr(Where, "/")) ++ Path
+	end.
 
 lines(Str) ->
 	string:tokens(Str, "\r\n").
@@ -121,6 +131,9 @@ test_ltrim() ->
 		{ [ " a a" ], "a a" },
 		{ [ "" ], "" }
 	].
+
+trim(Str) ->
+	ltrim(rtrim(Str)).
 
 trim([], _) -> [];
 trim(Str, Chr) ->

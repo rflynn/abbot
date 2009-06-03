@@ -136,11 +136,9 @@ ltrim_nick(Msg, Rawtxt, Nick) ->
 dotdotdot(Str, MaxLen) ->
 	if
 		length(Str) > MaxLen ->
-			string:substr(Str, 1, MaxLen - 3) ++ "...";
+			util:rtrim(
+				string:substr(Str, 1, MaxLen - 3)) ++ "...";
 		true ->
 			Str
 	end.
-
-
-
 
