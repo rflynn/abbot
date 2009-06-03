@@ -36,5 +36,8 @@ isctrl(Char) ->
 	((Char =< 31) or (Char >= 128)).
 
 isprint(Char) ->
-	isalnum(Char) or isspace(Char) or ispunct(Char).
+  isalnum(Char) or
+	isspace(Char) or
+	ispunct(Char) or
+	(Char >= 128). % try to support Unicode
 

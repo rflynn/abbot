@@ -46,7 +46,7 @@ rss(Pid, Dst, Nick, Cnt) ->
 	case Code of
 		error ->
 			Pid ! {q, irc:resp(Dst, Nick,
-				lists:flatten(	o_lib:format("slashdot -> ~s", [Code])))};
+				lists:flatten(io_lib:format("slashdot -> ~s", [Code])))};
 		_ -> ok(Pid, Dst, Nick, Cnt, Content)
 	end.
 

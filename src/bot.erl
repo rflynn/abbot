@@ -3,10 +3,10 @@
 % top-level bot loop; should be fairly generic
 
 % user-configurable stuff
--define(master,     "pizza_").
--define(nick,       "abbot").
--define(chan,       "#mod_spox").
--define(pass,       "kazam!"). % password for changing "master" user
+-define(pass,       "kazaam!").		% password for changing "master" user
+-define(master,     "pizza_").		% default master nick
+-define(nick,       "abbot").			% default "base" bot nick
+-define(chan,       "#mod_spox").	% default channel
 
 -module(bot).
 -author("pizza@parseerror.com").
@@ -19,7 +19,7 @@
 		q/2, deq/2, deqt/1,
 		newnick/1
 	]).
--define(reconn_interval,	10000). % reconnect check msecs
+-define(reconn_interval,	 5000). % reconnect check msecs
 % output queue config
 -define(deq_interval,  		  900). % line send msec
 -define(burstlines, 					3). % max output lines to burst at once
