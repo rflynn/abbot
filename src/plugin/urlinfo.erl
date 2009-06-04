@@ -141,10 +141,7 @@ title_([_|_]=Content) ->
 		true ->
 			T = mochiweb_xpath:execute(
 				"//title/text()", Doc, MyFuns),
-			if
-				[] /= T -> hd(T);
-				true -> ""
-			end
+			util:hd(T, "")
 	end.
 
 % remove any weird chars from title, especially \r and \n.
@@ -179,19 +176,15 @@ ok(Url, _Code, Content, Rawtxt) ->
 			% another bot's search result. don't send anything.
 			nil;
 		false ->
-			Title2 = ircutil:dotdotdot(cgi:entity_decode(Title), 70),
-			TinyURL = tinyurl(Url),
-			TinyURL2 =
-				% don't bother tinyurl-ing if it's not much shorter
-				% also note that this will automatically reject other
-				% tinyurl-like sites, an unexpected benefit
+			TinyURL = 
 				if 
-					length(TinyURL) + 15 >= length(Url) -> "";
-					true -> TinyURL
+					length(Url) < 30 -> ""; % short already
+					true -> tinyurl(Url)
 				end,
+			Title2 = ircutil:dotdotdot(cgi:entity_decode(Title), 70),
 			lists:flatten(
 				io_lib:format("url \"~s\" ~s",
-					[Title2, TinyURL2]))
+					[Title2, TinyURL]))
 	end.
 
 % given an arbitrary string, produce a list of all

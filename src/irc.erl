@@ -5,26 +5,14 @@
 -module(irc).
 -author("pizza@parseerror.com").
 -export([
-	state/3, setstate/3,
+	test/0,
 	parse/2, msgparse/1, str/1,
 	nick/1, user/1, privmsg/2, resp/3,
 	action/1, master/1,
 	is_chan/1, default_port/0,
-	test/0
+	state/3, setstate/3, state_save/1, state_load/0
 	]).
 -include_lib("irc.hrl").
-
-state(Irc, Key, Else) ->
-	% lookup entry in state dict by key
-	State = Irc#ircconn.state,
-	case dict:find(Key, State) of
-		error -> Else;
-		{ok, X} -> X
-	end.
-
-setstate(Irc, Key, Val) ->
-	St = dict:store(Key, Val, Irc#ircconn.state),
-	Irc#ircconn{state=St}.
 
 master(Irc) ->
 	Irc#ircconn.master.
@@ -248,4 +236,37 @@ test_srcparse() ->
 		{ircsrc,"punch.va.us.dal.net",[],[],"punch.va.us.dal.net"}
 	}
 ].
+
+state(Irc, Key, Else) ->
+	% lookup entry in state dict by key
+	State = Irc#ircconn.state,
+	case dict:find(Key, State) of
+		error -> Else;
+		{ok, X} -> X
+	end.
+
+setstate(Irc, Key, Val) ->
+	St = dict:store(Key, Val, Irc#ircconn.state),
+	Irc#ircconn{state=St}.
+
+% reconstitute existing, serialized irc state field from file, if it exists
+state_load() ->
+	case file:read_file("store/Irc.state") of
+		{ok, Binary} -> binary_to_term(Binary);
+		{error, Why} ->
+			io:format("Error loading state: ~p~n", [Why]),
+			dict:new()
+		end.
+
+% write irc state field to disk for later reconstitution
+state_save(Irc) ->
+	util:ensure_dir("store"),
+	State = Irc#ircconn.state,
+	Bytes = term_to_binary(State),
+	case file:write_file("store/Irc.state", Bytes) of
+		ok -> true;
+		{error, Why} ->
+			io:format("Error saving state: ~p~n", [Why]),
+			false
+		end.
 

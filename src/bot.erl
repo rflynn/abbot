@@ -30,6 +30,7 @@
 -import(react).
 -import(test).
 -import(ircutil).
+-import(plugins).
 
 % top-level launch
 % Bot0 = spawn(bot, go, ["irc.dal.net"]).
@@ -38,7 +39,7 @@ go(Where) ->
 	% crashes, we catch its exit message and reincarnate it.
 	process_flag(trap_exit, true),
 	io:format("Loading plugins...~n"),
-	Plugins = plugins_load(),
+	Plugins = plugins:load(),
 	io:format("Plugins loaded.~n"),
 	State = start(Where, Plugins),
 	io:format("Started.~n"),
@@ -61,7 +62,7 @@ conn(Host, Port, Plugins) ->
 		key=Host, server="blah",
 		real="blah",
 		master=?master, pass=?pass,
-		state=irc_state_load(),
+		state=irc:state_load(),
 		user=#ircsrc{
 			nick=?nick, user="blah", host="blah"}},
 	Pid = self(),
@@ -85,23 +86,18 @@ loop(Irc, Plugins) ->
 		conn ->
 			% attempt to connect if we're not already
 			Irc2 = Irc,
-			%Irc2 = bot:reconn(Irc),
+			%Irc2 = bot:reconn(Irc), % FIXME: does this work or not?
 			loop(Irc2, Plugins);
 		deq ->
-			%io:format("loop {deq}~n"),
 			Irc2 = bot:deq(Irc, Irc#ircconn.q),
 			loop(Irc2, Plugins);
 		{q, Msg} ->
-			% direct (original) output path, no
-			% pipelining
+			% direct (original) output path, no pipelining
 			io:format("loop {q, Msg=~p}~n", [Msg]),
-			% plugin req to queue an output msg
 			Irc2 = bot:q(Irc, Msg),
 			loop(Irc2, Plugins);
 		{pipe, Req, Resp} ->
-			% alternative path to {q...} that allows piping
-			% between commands, i.e. insult | translate en es
-			% this chains the output of each plugin into the input of the next
+			% output path, allow pipelining
 			io:format("loop {pipe, Req=~p Resp=~p}~n", [Req, Resp]),
 			Irc2 = pipe_run(Irc, Plugins, Req, Resp),
 			loop(Irc2, Plugins);
@@ -113,21 +109,20 @@ loop(Irc, Plugins) ->
 			Irc2 = irc:setstate(Irc, Key, Val),
 			loop(Irc2, Plugins);
 		{irc, Irc2} ->
-			% update IRC object itself, i.e. when
-			% changing nick
+			% update IRC object itself, i.e. when changing nick
 			io:format("loop {irc, Irc2}~n"),
 			loop(Irc2, Plugins);
 		save ->
 			% serialize and save bot state to disk
 			io:format("loop save~n"),
-			irc_state_save(Irc),
+			irc:state_save(Irc),
 			loop(Irc, Plugins);
 		{'EXIT', Pid, _Why} ->
 			% catch plugin reloads/crashes
-			Plugins2 = plugin_restart(Plugins, Pid),
+			Plugins2 = plugins:restart(Plugins, Pid),
 			loop(Irc, Plugins2);
 		{plugins, reload} ->
-			loop(Irc, plugins_load());
+			loop(Irc, plugins:load());
 		{tcp, Sock, Data} ->
 			% a line of IRC input from socket
 			io:format("<<< ~s", [Data]),
@@ -139,18 +134,18 @@ loop(Irc, Plugins) ->
 		{tcp_closed, _Sock} ->
 			io:format("~s:~p closed~n",
 				[Irc#ircconn.host, Irc#ircconn.port]),
-			irc_state_save(Irc),
+			irc:state_save(Irc),
 			Irc2 = Irc#ircconn{connected=false},
 			loop(Irc2, Plugins);
 		{tcp_error, _Sock, Why} ->
 			io:format("~s:~p err ~s~n",
 				[Irc#ircconn.host, Irc#ircconn.port, Why]),
-			irc_state_save(Irc),
+			irc:state_save(Irc),
 			Irc2 = Irc#ircconn{connected=false},
 			loop(Irc2, Plugins);
 		quit ->
 			io:format("Exiting...~n"),
-			irc_state_save(Irc),
+			irc:state_save(Irc),
 			timer:cancel(Irc#ircconn.deqt),
 			timer:cancel(Irc#ircconn.cont),
 			gen_tcp:close(Irc#ircconn.sock),
@@ -186,27 +181,21 @@ pipe_run(Irc, Plugins, Req, #ircmsg{}=Resp) ->
 	[H|T] = Req#ircmsg.pipeline,
 	Rawtxt2 = H ++ " " ++ Resp#ircmsg.rawtxt,
 	Req2 = Req#ircmsg{
-		% pass the output of the response as the suffix
-		% of the next request. plugins must implement a command
-		% structure that allows this
-		rawtxt = Rawtxt2,
-		txt = string:tokens(Rawtxt2, " "),
-		pipeline = T
-	},
+		% pass output of last Resp as next Req suffix.
+		% NOTE: plugins must suport this arch, but in erlang it's natural
+		rawtxt = Rawtxt2, pipeline = T,
+		txt = string:tokens(Rawtxt2, " ") },
 	react(Irc, Req2, Plugins);
 pipe_run(Irc, Plugins, Req, [Resp|Rest]) ->
 	Irc2 = pipe_run(Irc, Plugins, Req, Resp),
 	pipe_run(Irc2, Plugins, Req, Rest).
 
-
 % check that Irc.connected is true, if not, reconnect
 reconn(Irc) ->
 	io:format("reconn connected=~p~n", [Irc#ircconn.connected]),
 	if
-		not Irc#ircconn.connected ->
-			doreconn(Irc);
-		true ->
-			Irc
+		not Irc#ircconn.connected -> doreconn(Irc);
+		true -> Irc
 	end.
 
 % attempt reconnect
@@ -225,18 +214,11 @@ doreconn(Irc) ->
 			Irc
 	end.
 
-% input handling; most of the stuff here is IRC
-% protocol crap to keep the connection alive and/or
-% sane, except...
+% input handling; most here is IRC protocol crap, keep connection alive
 react(Irc, #ircmsg{type="PRIVMSG"}=Msg, Plugins) ->
-	% ... me. I send every privmsg to all our plugins;
-	% most of the time resulting in absolutely nothing;
-	% however, if something does match a pattern they're
-	% looking for and they produce output, they send loop()
-	% a {q, ...} signal to queue their output to be sent.
+	% ...except this, which handles user commands
 	privmsg(Irc, Msg, Plugins);
 react(Irc, #ircmsg{type="PING", src=Src}, _) ->
-	% PING -> PONG
 	bot:q(Irc, #ircmsg{type="PONG", rawtxt=Src#ircsrc.raw});
 react(Irc, #ircmsg{type="376"}, _) ->
 	% end of MOTD, let's do stuff!
@@ -248,33 +230,25 @@ react(Irc, #ircmsg{type="433"}, _) ->
 	NewUser = (Irc#ircconn.user)#ircsrc{nick=NewNick},
 	Irc2 = Irc#ircconn{user=NewUser},
 	bot:q(Irc2, irc:nick(NewNick));
-react(Irc, #ircmsg{type="ERROR", src=_Src}, _) ->
-	% Oh noes...
-	Irc;
-react(Irc, #ircmsg{type="NOTICE"}, _) ->
-	Irc;
-react(Irc, #ircmsg{type="PART"}, _) ->
-	Irc;
-react(Irc, #ircmsg{type="JOIN"}, _) ->
-	Irc;
-react(Irc, #ircmsg{type="QUIT"}, _) ->
-	Irc;
+react(Irc, #ircmsg{type="ERROR"}, _)	-> Irc;
+react(Irc, #ircmsg{type="NOTICE"}, _) -> Irc;
+react(Irc, #ircmsg{type="PART"}, _)		-> Irc;
+react(Irc, #ircmsg{type="JOIN"}, _)		-> Irc;
+react(Irc, #ircmsg{type="QUIT"}, _)		-> Irc;
 react(Irc, #ircmsg{type=Type}, _) ->
-	% something i didn't expect
 	io:format("*** TYPE ~s unhandled~n", [Type]),
 	Irc.
 
 % handle a privmsg
+% TODO: this could be cleaned up quite a bit
 privmsg(
 	Irc,
 	#ircmsg{
-		type="PRIVMSG",
-		dst=Dst,
+		type="PRIVMSG", dst=Dst,
 		src=#ircsrc{nick=From},
 		txt=[First|Rest]=All,
 		rawtxt=Rawtxt
-	}=Msg,
-	Plugins) ->
+	}=Msg, Plugins) ->
 	Me = (Irc#ircconn.user)#ircsrc.nick,
 	First2 = util:rtrim(First, $:),
 	First3 = util:rtrim(First2, $,),
@@ -300,10 +274,8 @@ do_privmsg(Plugins, Irc, Msg2, Dst, From, Txt) ->
 	% if they do match some plugin pattern and generate a response
 	% or change in IRC state, they can "Pid ! foo", which will
 	% be processed in loop()
-	[
-		PluginPid ! {act, Pid, Irc, Msg2, Dst, From, Txt} ||
-		{_Name,  _Atom, PluginPid} <- Plugins
-	],
+	[ PluginPid ! {act, Pid, Irc, Msg2, Dst, From, Txt} ||
+		{_Name,  _Atom, PluginPid} <- Plugins ],
 	Irc.
 
 
@@ -331,8 +303,7 @@ help(Irc, Plugins, Dst, Nick, ["help", Topic]) ->
 	Irc.
 
 % queue an #ircmsg{} for sending
-q(Irc, []) ->
-	Irc;
+q(Irc, []) -> Irc;
 q(Irc, [#ircmsg{}=Head|Tail]) ->
 	%io:format("que ~s", [irc:str(Head)]),
 	NewQ = Irc#ircconn.q ++ [Head],
@@ -345,13 +316,11 @@ q(Irc, #ircmsg{}=Msg) ->
 	Irc2.
 
 % signal loop to dequeue output at a regular interval
-deqt(Loop_Pid) ->
-	Loop_Pid ! deq.
+deqt(Loop_Pid) -> Loop_Pid ! deq.
 
 % called regularly to dequeue irc output.
 % implements bursting cfged via ircconn ircqopt{}
-deq(Irc, []) ->
-	Irc;
+deq(Irc, []) -> Irc;
 deq(Irc, Q) ->
 	St = irc:state(Irc, deq,
 		#ircqopt{
@@ -370,12 +339,11 @@ deq(Irc, Q) ->
 		if
 			Burst > 1 -> St#ircqopt{lastburst=Now};
 			true -> St
-			end,
+		end,
 	irc:setstate(Irc2, deq, St2).
 
 % send an immediate burst of 'Cnt' msgs and update queue
-sendburst(Irc, 0) ->
-	Irc;
+sendburst(Irc, 0) -> Irc;
 sendburst(Irc, Cnt) ->
 	[H|T] = Irc#ircconn.q,
 	%io:format("deq ~s", [irc:str(H)]),
@@ -419,74 +387,6 @@ test_newnick() ->
 		{ [ "abbot99" ], "abbot100" },
 		{ [ "abbot_99" ], "abbot_100" }
 	].
-
-% reconstitute existing, serialized irc state field from file, if it exists
-irc_state_load() ->
-	case file:read_file("store/Irc.state") of
-		{ok, Binary} -> binary_to_term(Binary);
-		{error, Why} ->
-			io:format("Error loading state: ~p~n", [Why]),
-			dict:new()
-		end.
-
-% write irc state field to disk for later reconstitution
-irc_state_save(Irc) ->
-	util:ensure_dir("store"),
-	State = Irc#ircconn.state,
-	Bytes = term_to_binary(State),
-	case file:write_file("store/Irc.state", Bytes) of
-		ok -> true;
-		{error, Why} ->
-			io:format("Error saving state: ~p~n", [Why]),
-			false
-		end.
-
-% find, load, test and return all available plugins
-plugins_load() ->
-	case file:list_dir("plugin") of
-		{ok, Files} ->
-			Ext = code:objfile_extension(), % ".beam"
-			Files2 = lists:filter( % all .beam files
-				fun(F) -> string:str(F, Ext) /= 0 end, Files),
-			Names = [ % parse prefix
-				string:substr(Filename, 1,
-					string:str(Filename, Ext) - 1)
-						|| Filename <- Files2 ],
-			io:format("Plugins=~p~n", [Names]),
-			[ plugin_run(Name) || Name <- Names ];
-		_ ->
-			io:format("'plugin' directory not found. exiting.~n"),
-			exit(whereareyou)
-		end.
-
-% given a plugin module name as a string,
-% load, unit test, spawn process and link plugin
-% and return record
-plugin_run(Name) ->
-	Atom = list_to_atom(Name),
-	case Atom:test() of
-		false ->
-			io:format("Unit tests failed, exiting.~n"),
-			exit(0);
-		true ->
-			Pid = spawn_link(Atom, loop, []),
-			{ Name, Atom, Pid }
-		end.
-
-% DeadPid crashed, search Plugins for a matching pid and
-% replace entry with new instance of plugin
-plugin_restart(Plugins, DeadPid) ->
-	lists:map(
-		fun({Name, _Atom, Pid}=P) ->
-			if
-				Pid == DeadPid ->
-					io:format("Pid ~p was the ~s plugin, restarting...~n",
-						[DeadPid, Name]),
-					plugin_run(Name);
-				true -> P
-			end
-		end,
-		Plugins).
 
 test() ->
 	test:unit(bot,

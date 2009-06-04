@@ -7,6 +7,7 @@
 -export(
 	[
 		relpath/2,
+		hd/2,
 		min/2,
 		join/2, j/1,
 		rtrim/2, rtrim/1,
@@ -37,6 +38,9 @@ test() ->
 			{ split, 		test_split()			},
 			{ tokens,		test_tokens()			}
 		]).
+
+hd([], Else) -> Else;
+hd([H|_], _) -> H.
 
 % construct an absolute path from a relative one
 % used like so: realpath("foo.erl", "rel/a/tive")
