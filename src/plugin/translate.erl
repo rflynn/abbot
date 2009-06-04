@@ -25,10 +25,11 @@ test() ->
 
 loop() ->
 	receive
-		{ act, Pid, _Irc, Msg, Dst, Nick, ["translate", FromLang, ToLang | Txt]} ->
-			xl(Pid, Msg, Dst, Nick, FromLang, ToLang, Txt),
+		{ act, Pid, Irc, Msg, Dst, Nick, ["translate", FromLang, ToLang | Txt]} ->
+			xl(Pid, Irc, Msg, Dst, Nick, FromLang, ToLang, Txt),
 			loop();
 		%{ act, Pid, Irc, _, Dst, Nick, ["translate", "attach", Who, FromLang, ToLang]} ->
+		% TODO: attach feature
 		%	attach(Pid, Irc, Dst, Nick, Who, FromLang, ToLang),
 		%	loop();
 		{ act, _, _, _, _, _, _ } ->
@@ -36,30 +37,35 @@ loop() ->
 		{ help, Pid, Dst, Nick } ->
 			Pid ! {q,
         [ irc:resp(Dst, Nick, Nick ++ ": " ++ Que) || Que <-
-          [ "[\"translate\", From, To | Txt ] -> Translate Txt From language To language",
+          [ "[\"translate\", From, To | Txt ] -> Translate Txt From to To",
           	%"[\"translate\", \"attach\", Who, From, To] -> Automatically Translate To/From for Who",
-            "Langs = [" ++ util:join(",", [ Short || {Short,_} <- langs() ]) ++ "]"
+            "Lang = [" ++ util:join(",", [ Short || {Short,_} <- langs() ]) ++ "]",
+						"Example: translate en es hello"
 					]
 				]},
 			loop()
 	end.
 
-xl(Pid, Msg, Dst, Nick, "en", "engrish", Txt_) ->
+xl(Pid, _, Msg, Dst, Nick, "en", "engrish", Txt_) ->
 	Txt = util:j(Txt_),
 	Result = charswap(Txt, [], $l, $r),
 	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Result) };
-
-xl(Pid, Msg, Dst, Nick, "en", "aol", Txt_) ->
+xl(Pid, _, Msg, Dst, Nick, "en", "aol", Txt_) ->
 	Txt = util:j(Txt_),
 	Result = en_aol(Txt),
 	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Result) };
-
-xl(Pid, Msg, Dst, Nick, "aol", "en", Txt_) ->
+xl(Pid, _, Msg, Dst, Nick, "aol", "en", Txt_) ->
 	Txt = util:j(Txt_),
 	Result = aol_en(Txt),
 	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Result) };
-
-xl(Pid, Msg, Dst, Nick, From, To, Txt_) ->
+xl(Pid, _Irc, Msg, Dst, Nick, "/b/", "en", Txt) ->
+	% TODO: don't reload the file fresh every time, sheesh
+	% plugins should have an "init" function or sumthn
+	% where they load data into Irc's state
+	Dict = load_internet_slang(),
+	Result = util:j(internet_slang(Txt, [], Dict)),
+	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Result)};
+xl(Pid, _Irc, Msg, Dst, Nick, From, To, Txt_) ->
 	Txt = util:j(Txt_),
 	io:format("translate From=~p To=~p Txt_=~p Txt=~p~n",
 		[From, To, Txt_, Txt]),
@@ -89,10 +95,11 @@ content(From, To, Txt) ->
 		{
 			?babelfish_url,																				% URL
 			[{ "Referer", ?babelfish_url }, 											% Headers
-			 { "User-Agent", "Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.0)" }],
+			 { "User-Agent",
+			 	 "Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.0)" }],
 			"application/x-www-form-urlencoded",									% Encoding
 				util:join("&",
-					[ K ++ "=" ++ cgi:url_encode(V) || {K,V} <- Post ])	% POST fields
+					[ K ++ "=" ++ cgi:url_encode(V) || {K,V} <- Post ])
 		},
 		[{timeout, ?timeout}],
 		[{body_format, binary}]
@@ -108,8 +115,6 @@ ok(Pid, Msg, Dst, Nick, Contents) ->
 
 result([]) -> [];
 result(Contents) ->
-	% <form action="http://search.yahoo.com/search;_ylt=A0LEUFiT9CVKkZEAsDy37s4F" method=get>
-	%    <div id="result"><div style="padding:0.6em;">foo</div></div>
 	Doc = mochiweb_html:parse(Contents),
 	Mapping = [{<<"link">>,1},{<<"myUrl">>,2}],
 	F = fun(_Ctx, [String]) -> % mysterious
@@ -133,8 +138,11 @@ result(Contents) ->
 
 langs() ->
 	[
+		{ "aol","Aolspeak"			},
+		{ "/b/","/b/speak"			},
 		{ "de", "German"				},
 		{ "el", "Greek"					},
+		{ "engrish","Engrish"		},
 		{ "es", "Spanish"				},
 		{ "fr", "French"				},
 		{ "it", "Italian"				},
@@ -161,6 +169,7 @@ charswap("city" ++ Rd, Wr, A, B) ->
 charswap([X|Rd], Wr, A, B) ->
 	charswap(Rd, Wr ++ [X], A, B).
 
+% TODO: move data out to file
 en_aol(Str) -> en_aol(string:to_upper(Str), []).
 en_aol([],      Wr) -> Wr ++ "!!!1";
 en_aol([$A|Rd], Wr) -> en_aol(Rd, Wr ++ [$@]);
@@ -169,6 +178,7 @@ en_aol([$I|Rd], Wr) -> en_aol(Rd, Wr ++ [$1]);
 en_aol([$K|Rd], Wr) -> en_aol(Rd, Wr ++ [$|, $<]);
 en_aol([$O|Rd], Wr) -> en_aol(Rd, Wr ++ [$0]);
 en_aol([$S|Rd], Wr) -> en_aol(Rd, Wr ++ [$$]);
+en_aol("hello" ++ Rd, Wr)	-> en_aol(Rd, Wr ++ "HEL0");
 en_aol("the" ++ Rd, Wr)	-> en_aol(Rd, Wr ++ "D@");
 en_aol("too" ++ Rd, Wr)	-> en_aol(Rd, Wr ++ "2");
 en_aol("to"  ++ Rd, Wr)	-> en_aol(Rd, Wr ++ "2");
@@ -179,30 +189,56 @@ en_aol("way"  ++ Rd, Wr)	-> en_aol(Rd, Wr ++ "WAI");
 en_aol([R|Rd], []) -> en_aol(Rd, [R]);
 en_aol([R|Rd], Wr) -> en_aol(Rd, Wr ++ [R]).
 
-aol_en(Str) -> aol_en(string:to_lower(Str), []).
-aol_en([],      Wr) -> Wr;
-aol_en([$!|Rd], Wr) -> aol_en(Rd, Wr);
-aol_en([$1|Rd], Wr) -> aol_en(Rd, Wr);
-aol_en("???" ++ Rd, Wr)	-> aol_en(Rd, Wr ++ "?");
-aol_en([$?|Rd], Wr) 		-> aol_en(Rd, Wr);
-aol_en(" da " ++ Rd, Wr)-> aol_en(Rd, Wr ++ " the ");
-aol_en("omg" ++ Rd, Wr)-> aol_en(Rd, Wr ++ "oh my");
-aol_en("helo" ++ Rd, Wr)-> aol_en(Rd, Wr ++ "hello");
-aol_en("lulz" ++ Rd, Wr)-> aol_en(Rd, Wr ++ "haha");
+% TODO: move data out to file
+aol_en(Str) ->
+	Lc = string:to_lower(Str),
+	aol_en(string:tokens(Lc, " ?!1"), []).
+aol_en([],      Wr) -> util:j(Wr);
+aol_en("da" ++ Rd, Wr)-> aol_en(Rd, Wr ++ ["the"]);
+aol_en("omg" ++ Rd, Wr)-> aol_en(Rd, Wr ++ ["oh my"]);
+aol_en("helo" ++ Rd, Wr)-> aol_en(Rd, Wr ++ ["hello"]);
+aol_en("lulz" ++ Rd, Wr)-> aol_en(Rd, Wr ++ ["haha"]);
+aol_en("noes" ++ Rd, Wr)	-> aol_en(Rd, Wr ++ ["no"]);
 aol_en("wtf" ++ Rd, Wr)	-> aol_en(Rd, Wr);
-aol_en("lol" ++ Rd, Wr)	-> aol_en(Rd, Wr ++ "haha");
-aol_en("ur " ++ Rd, Wr)	-> aol_en(Rd, Wr ++ "your ");
-aol_en(" u " ++ Rd, Wr)	-> aol_en(Rd, Wr ++ " you ");
-aol_en(" u!" ++ Rd, Wr)	-> aol_en(Rd, Wr ++ " you");
-aol_en("u?" ++ Rd, Wr)	-> aol_en(Rd, Wr ++ "you?");
-aol_en("r " ++ Rd, Wr)	-> aol_en(Rd, Wr ++ "are ");
-aol_en(" wai" ++ Rd, Wr)	-> aol_en(Rd, Wr ++ " way");
-aol_en("i m " ++ Rd, Wr)	-> aol_en(Rd, Wr ++ "i am ");
-aol_en("awsum" ++ Rd, Wr)	-> aol_en(Rd, Wr ++ "awesome");
-aol_en("fien" ++ Rd, Wr)	-> aol_en(Rd, Wr ++ "fine");
+aol_en("lol" ++ Rd, Wr)	-> aol_en(Rd, Wr ++ ["haha"]);
+aol_en("ur" ++ Rd, Wr)	-> aol_en(Rd, Wr ++ ["your"]);
+aol_en("u" ++ Rd, Wr)	-> aol_en(Rd, Wr ++ ["you"]);
+aol_en("r" ++ Rd, Wr)	-> aol_en(Rd, Wr ++ ["are"]);
+aol_en("wai" ++ Rd, Wr)	-> aol_en(Rd, Wr ++ ["way"]);
+aol_en("m" ++ Rd, Wr)	-> aol_en(Rd, Wr ++ ["am"]);
+aol_en("awsum" ++ Rd, Wr)	-> aol_en(Rd, Wr ++ ["awesome"]);
+aol_en("fien" ++ Rd, Wr)	-> aol_en(Rd, Wr ++ ["fine"]);
 aol_en([R|Rd], []) -> aol_en(Rd, [R]);
 aol_en([R|Rd], Wr) -> aol_en(Rd, Wr ++ [R]).
 
 % "HELO HOW R U??!?! WTF IM FIEN!11!1!11 WTF"
 % "OMG I M SO FCKIG AWSUM!!!!!1 CUM WURSHP MEE BCH!!!!!1" 
+
+load_internet_slang() ->
+	parse_internet_slang(util:readlines(util:relpath(
+		"translate.erl", "data/translate/internet-slang")), dict:new()).
+
+parse_internet_slang([], Dict) ->
+	Dict;
+parse_internet_slang([Line|Rest], Dict) ->
+	Line2 = util:rtrim(Line, 10),
+	[Key, Val] = string:tokens(Line2, ":"),
+	Val2 = util:ltrim(Val),
+	Keys = string:tokens(Key, ","),
+	Dict2 = lists:foldr(
+		fun(K, D) ->
+			dict:store(string:to_upper(K), Val2, D) end, Dict, Keys),
+	io:format("parse_internet_slang Keys=~p Val2=~p~n", [Keys, Val2]),
+	parse_internet_slang(Rest, Dict2).
+
+internet_slang([], Acc, _) ->
+	Acc;
+internet_slang([Word|Rest], Acc, Dict) ->
+	Trans =
+		case dict:find(string:to_upper(Word), Dict) of
+			{ok, Val} -> Val;
+			error -> Word
+		end,
+	internet_slang(Rest, Acc ++ [Trans], Dict).
+
 

@@ -3,7 +3,7 @@
 % top-level bot loop; should be fairly generic
 
 % user-configurable stuff
--define(pass,       "kazaam!").		% password for changing "master" user
+-define(pass,       "kazam!").		% password for changing "master" user
 -define(master,     "pizza_").		% default master nick
 -define(nick,       "abbot").			% default "base" bot nick
 -define(chan,       "#mod_spox").	% default channel

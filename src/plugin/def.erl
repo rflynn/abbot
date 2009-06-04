@@ -12,6 +12,7 @@
 -include_lib("../irc.hrl").
 -import(test).
 -import(irc).
+-import(ircutil).
 
 test() ->
 	% TODO: actual, you know, tests.
@@ -45,18 +46,28 @@ loop() ->
 			dict_get(Pid, Irc, Msg, Dst, Nick, "is", Term),
 			loop();
 		% dict store
-		{act, Pid, Irc, _, _, Nick, [Term, "is" | Rest]} ->
-			dict_set(Pid, Irc, Nick, Term, Rest),
+		{act, Pid, Irc, Msg, Dst, Nick, [Term, "is" | Rest]} ->
+			dict_set(Pid, Irc, Msg, Dst, Nick, Term, Rest),
 			loop();
-		{act, Pid, Irc, _, _, Nick, [Term, "are" | Rest]} ->
-			dict_set(Pid, Irc, Nick, Term, Rest),
+		{act, Pid, Irc, Msg, Dst, Nick, [Term, "are" | Rest]} ->
+			dict_set(Pid, Irc, Msg, Dst, Nick, Term, Rest),
 			loop();
-		{act, Pid, Irc, _, _, Nick, [Term, "am" | Rest]} ->
-			dict_set(Pid, Irc, Nick, Term, Rest),
+		{act, Pid, Irc, Msg, Dst, Nick, [Term, "am" | Rest]} ->
+			dict_set(Pid, Irc, Msg, Dst, Nick, Term, Rest),
 			loop();
 		% dict forget
 		{act, Pid, Irc, _, Dst, Nick, ["forget" | Term]} ->
 			dict_forget(Pid, Irc, Dst, Nick, Term),
+			loop();
+		% def list
+		{act, Pid, Irc, Msg, Dst, Nick, ["def", "list"]} ->
+			dict_list(Pid, Irc, Msg, Dst, Nick),
+			loop();
+		{act, Pid, Irc, Msg, Dst, Nick, ["what", "do", "you", "know"]} ->
+			dict_list(Pid, Irc, Msg, Dst, Nick),
+			loop();
+		{act, Pid, Irc, Msg, Dst, Nick, ["what", "do", "you", "know?"]} ->
+			dict_list(Pid, Irc, Msg, Dst, Nick),
 			loop();
 		{act, _, _, _, _, _, _} ->
 			loop();
@@ -76,12 +87,15 @@ loop() ->
 % NOTE: translations:
 %		"you" -> "i" ("what are you?" -> "i am ...")
 %		"i" -> Nick ("i am tired" -> Nick ++ " is tired")
-dict_set(Pid, Irc, _Nick, "you", Rest) ->
+dict_set(Pid, Irc, _, _, _Nick, "you", Rest) ->
 	dict_set_(Pid, Irc, "i", Rest);
-dict_set(Pid, Irc, Nick, "i", Rest) ->
+dict_set(Pid, Irc, _, _, Nick, "i", Rest) ->
 	dict_set_(Pid, Irc, Nick, Rest);
-dict_set(Pid, Irc, _Nick, Term, Rest) ->
-	dict_set_(Pid, Irc, Term, Rest).
+dict_set(Pid, Irc, Msg, Dst, Nick, Term, Rest) ->
+	case ircutil:isquestion(Rest) of
+		true -> dict_get(Pid, Irc, Msg, Dst, Nick, "are", Term);
+		false -> dict_set_(Pid, Irc, Term, Rest)
+		end.
 
 dict_set_(Pid, Irc, Term, Rest) ->
 	Is = irc:state(Irc, is, dict:new()),
@@ -124,4 +138,11 @@ dict_term(Term) ->
 	Deq = lists:flatten(ircutil:dequestion([J])),
 	io:format("dict_term(~p) -> ~p~n", [Term, Deq]),
 	Deq.
+
+% list all the topics i know about
+dict_list(Pid, Irc, Msg, Dst, Nick) ->
+	Is = irc:state(Irc, is, dict:new()),
+	Answer = util:j([ K || {K,_} <- lists:sort(dict:to_list(Is)) ]),
+	io:format("dict_list=~s~n", [Answer]),
+	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Answer) }.
 

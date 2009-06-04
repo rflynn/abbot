@@ -60,10 +60,12 @@ info(Url, Rawtxt) ->
 scan_for_urls(Pid, Rawtxt, Dst) ->
 	Urls = % detect output from other abbots
 		case re:run(Rawtxt,
-			"^(" ++
+			"(" ++
 				% now we always prefix to detect other bots
-				"url(?:info)? " ++
-			")$") of
+				"^url(?:info)? " ++
+				"|" ++
+				"/\\." % avoid mod_spox's slashdot(!)
+			")") of
 			{match,_} -> [];	% from another abbot, ignore URLs!
 												% this avoids an endless feedback cycle
 			_ -> urlinfo:urlmatch(Rawtxt)
