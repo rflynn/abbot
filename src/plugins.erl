@@ -18,7 +18,7 @@ test() ->
 
 % find, load, test and return all available plugins
 load() ->
-	case file:list_dir(dir) of
+	case file:list_dir(?dir) of
 		{ok, Files} ->
 			Ext = code:objfile_extension(), % ".beam"
 			Files2 = lists:filter( % all .beam files
@@ -30,7 +30,7 @@ load() ->
 			io:format("Plugins=~p~n", [Names]),
 			[ plugins:run(Name) || Name <- Names ];
 		_ ->
-			io:format("'plugin' directory not found. exiting.~n"),
+			io:format("'~s' directory not found. exiting.~n", [?dir]),
 			exit(whereareyou)
 		end.
 
