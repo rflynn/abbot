@@ -46,6 +46,10 @@ loop() ->
 			loop()
 	end.
 
+xl(Pid, _, Msg, Dst, Nick, "engrish", "en", Txt_) ->
+	Txt = util:j(Txt_),
+	Result = charswap(Txt, [], $l, $r),
+	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Result) };
 xl(Pid, _, Msg, Dst, Nick, "en", "engrish", Txt_) ->
 	Txt = util:j(Txt_),
 	Result = charswap(Txt, [], $l, $r),
@@ -228,7 +232,7 @@ parse_internet_slang([Line|Rest], Dict) ->
 	Dict2 = lists:foldr(
 		fun(K, D) ->
 			dict:store(string:to_upper(K), Val2, D) end, Dict, Keys),
-	io:format("parse_internet_slang Keys=~p Val2=~p~n", [Keys, Val2]),
+	%io:format("parse_internet_slang Keys=~p Val2=~p~n", [Keys, Val2]),
 	parse_internet_slang(Rest, Dict2).
 
 internet_slang([], Acc, _) ->

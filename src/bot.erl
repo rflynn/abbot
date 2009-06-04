@@ -3,7 +3,7 @@
 % top-level bot loop; should be fairly generic
 
 % user-configurable stuff
--define(pass,       "kazam!").		% password for changing "master" user
+-define(pass,       "****!").			% password for changing "master" user
 -define(master,     "pizza_").		% default master nick
 -define(nick,       "abbot").			% default "base" bot nick
 -define(chan,       "#mod_spox").	% default channel
@@ -170,9 +170,7 @@ pipe_parse(#ircmsg{rawtxt=Rawtxt}=Msg) ->
 	Msg2.
 
 % evaluate a pipelined message; feeding the output
-% of each plugin into the input of the next one
-% until there are none left, and then output
-% the msg
+% of each plugin into input of next until none left, then send
 pipe_run(Irc, _, #ircmsg{pipeline=[]}, #ircmsg{}=Resp) ->
 	bot:q(Irc, Resp);
 pipe_run(Irc, _, _, []) ->
@@ -232,8 +230,10 @@ react(Irc, #ircmsg{type="433"}, _) ->
 	bot:q(Irc2, irc:nick(NewNick));
 react(Irc, #ircmsg{type="ERROR"}, _)	-> Irc;
 react(Irc, #ircmsg{type="NOTICE"}, _) -> Irc;
-react(Irc, #ircmsg{type="PART"}, _)		-> Irc;
 react(Irc, #ircmsg{type="JOIN"}, _)		-> Irc;
+react(Irc, #ircmsg{type="PART"}, _)		-> Irc;
+react(Irc, #ircmsg{type="MODE"}, _)		-> Irc;
+react(Irc, #ircmsg{type="NICK"}, _)		-> Irc;
 react(Irc, #ircmsg{type="QUIT"}, _)		-> Irc;
 react(Irc, #ircmsg{type=Type}, _) ->
 	io:format("*** TYPE ~s unhandled~n", [Type]),
@@ -278,18 +278,6 @@ do_privmsg(Plugins, Irc, Msg2, Dst, From, Txt) ->
 		{_Name,  _Atom, PluginPid} <- Plugins ],
 	Irc.
 
-
-help(Irc, Plugins, Dst, Nick, ["help"]) ->
-	% for a generic help message, list all plugins
-	PluginNames = lists:sort([ Name || {Name,_,_} <- Plugins ]),
-	bot:q(Irc,
-		[ irc:resp(Dst, Nick, Nick ++ ": " ++ Out)
-			|| Out <-
-			[
-				"[\"help\" | Topic] -> get help for a particular topic",
-				"Topic = [" ++ util:join(",", PluginNames) ++ "]"
-			]
-		]);
 help(Irc, Plugins, Dst, Nick, ["help", Topic]) ->
 	% for a specific help topic, ask the plugins themselves
 	Pid = self(),
@@ -300,7 +288,18 @@ help(Irc, Plugins, Dst, Nick, ["help", Topic]) ->
 		end
 	 || {Name,  _Atom, PluginPid} <- Plugins
 	],
-	Irc.
+	Irc;
+help(Irc, Plugins, Dst, Nick, ["help" | _]) ->
+	% for a generic help message, list all plugins
+	PluginNames = lists:sort([ Name || {Name,_,_} <- Plugins ]),
+	bot:q(Irc,
+		[ irc:resp(Dst, Nick, Nick ++ ": " ++ Out)
+			|| Out <-
+			[
+				"[\"help\" | Topic] -> get help for a particular topic",
+				"Topic = [" ++ util:join(",", PluginNames) ++ "]"
+			]
+		]).
 
 % queue an #ircmsg{} for sending
 q(Irc, []) -> Irc;

@@ -76,8 +76,9 @@ loop() ->
 			Pid ! { q, 
 				[ irc:resp(Dst, Nick, Nick ++ ": " ++ Txt) || Txt <-
 					[
-						"[Term, \"is\" | Def]   -> set definition Def for Term",
-						"[\"what\", \"is\", Term] -> get definition for Term"
+						"[Term, \"is\" | Def]   -> remember Term => Def",
+						"[\"what\", \"is\", Term] -> look up Term",
+						"[\"def\", \"list\"]      -> Terms i know"
 					]
 				] },
 			loop()
@@ -102,7 +103,7 @@ dict_set_(Pid, Irc, Term, Rest) ->
 	Term2 = dict_term([Term]),
 	Val = util:j(Rest),
 	io:format("dict_set Term2=~p Val=~p~n", [Term2, Val]),
-	Is2 = dict:store(string:to_upper(Term2), Val, Is),
+	Is2 = dict:store(string:to_lower(Term2), Val, Is),
 	Pid ! {setstate, is, Is2}.
 
 % retrieve Key -> Val mapping in dictionary
@@ -114,7 +115,7 @@ dict_get(Pid, Irc, Msg, Dst, Nick, _Connect, ["you"]) ->
 dict_get(Pid, Irc, Msg, Dst, Nick, Connect, Term) ->
 	Is = irc:state(Irc, is, dict:new()),
 	Term2 = dict_term(Term),
-	case dict:find(string:to_upper(Term2), Is) of
+	case dict:find(string:to_lower(Term2), Is) of
 		error -> nil;
 		{ok, X} ->
 			Answer = Term2 ++ " " ++ Connect ++ " " ++ X,
@@ -128,7 +129,7 @@ dict_forget(Pid, Irc, Dst, Nick, Term) ->
 	Is = irc:state(Irc, is, dict:new()),
 	Term2 = dict_term(Term),
 	io:format("dict_forget Term=~p Term2=~p~n", [Term, Term2]),
-	Is2 = dict:erase(string:to_upper(Term2), Is),
+	Is2 = dict:erase(string:to_lower(Term2), Is),
 	Pid ! {setstate, is, Is2},
 	Pid ! {q, irc:resp(Dst, Nick, Nick ++ ": forgotten.") }.
 

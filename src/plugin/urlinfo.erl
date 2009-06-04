@@ -13,10 +13,13 @@
 -import(irc).
 -import(ircutil).
 -import(test).
--define(timeout, 5000).
+-define(timeout, 10000).
 
 loop() ->
 	receive
+		{act, Pid, _Irc, #ircmsg{rawtxt=Rawtxt}=Msg, Dst, Nick, ["url", "txt", Url ]} ->
+			urltxt(Pid, Msg, Rawtxt, Dst, Nick, Url),
+			loop();
 		{act, Pid, _Irc, #ircmsg{rawtxt=Rawtxt}=Msg, Dst, Nick, ["url", Url ]} ->
 			act(Pid, Msg, Rawtxt, Dst, Nick, Url),
 			loop();
@@ -27,11 +30,52 @@ loop() ->
 			loop();
 		{help, Pid, Dst, Nick} ->
 			Pid ! {q,
-				irc:resp(Dst, Nick, Nick ++ ": " ++
-					"[\"url\", Url] -> fetch a URL's title and tinyurl")
+				[	irc:resp(Dst, Nick, Nick ++ ": " ++ Txt) || Txt <-
+					[ "[\"url\", Url] -> title and tinyurl report",
+					  "[\"url\", \"txt\" Url] -> URL text" ]
+				]
 			},
 			loop()
 	end.
+
+urltxt(Pid, Msg, _Rawtxt, Dst, Nick, Url) ->
+	Raw = txt(Url),
+	Txt = ircutil:dotdotdot(Raw, 400),
+	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Txt)}.
+
+txt(Url) ->
+	{Code, Content} = content(Url),
+	io:format("info Url=~s Code=~p Content=...~n",
+		[Url,Code]),
+	case Code of
+		notparsable -> "";
+		error -> "";
+		_ -> txt_(Content)
+	end.
+
+txt_(Content) ->
+	Doc = mochiweb_html:parse(Content),
+	Mapping = [{<<"link">>,1},{<<"myUrl">>,2}],
+	F =
+		fun(_Ctx, [String]) ->
+			proplists:get_value(String, Mapping, 0) end,
+	MyFuns = [{my_fun, F, [string]}],
+	% FIXME: would be much cleaner if we could include or exclude based
+	% on the name of the tag, but this xpath implementation seems to
+	% not support that(!)
+	Bin = mochiweb_xpath:execute("//body//text()", Doc, MyFuns),
+	io:format("Bin=~p~n", [Bin]),
+	Txt = [ binary_to_list(B) || B <- lists:flatten(Bin) ],
+	NoScript = lists:filter(
+		fun(Str) ->
+			(string:str(Str, "var ") == 0) and
+			(string:str(Str, "#") == 0) and
+			(string:str(Str, "{") == 0) and
+			(string:str(Str, "}") == 0)
+		end, Txt),
+	Txt2 = util:j(ircutil:stripjunk(NoScript)),
+	Txt3 = util:j(string:tokens(Txt2, "\r\n\t")),
+	Txt3.
 
 % 
 act(Pid, Msg, Rawtxt, Dst, Nick, Url) ->
