@@ -170,6 +170,8 @@ charswap("City" ++ Rd, Wr, A, B) ->
 	charswap(Rd, Wr ++ "Shitty", A, B);
 charswap("city" ++ Rd, Wr, A, B) ->
 	charswap(Rd, Wr ++ "shitty", A, B);
+charswap("sh " ++ Rd, Wr, A, B) ->
+	charswap(Rd, Wr ++ "s ", A, B);
 charswap([X|Rd], Wr, A, B) ->
 	charswap(Rd, Wr ++ [X], A, B).
 
@@ -244,5 +246,4 @@ internet_slang([Word|Rest], Acc, Dict) ->
 			error -> Word
 		end,
 	internet_slang(Rest, Acc ++ [Trans], Dict).
-
 
