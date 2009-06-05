@@ -1,5 +1,25 @@
 % ex: set ts=2 noet:
-%  
+
+% a "dictionary" plugin that remembers what people say and
+% answers their questions, occasionally with weird, funny
+% or even relevant results
+
+%
+% Conceptual Interface:
+%
+%		i am ashamed 			-> set(FooNick, "ashamed")
+%		wings are 50% off!-> set("wings", "50% off!")
+%		you are a jerk 		-> set(MyNick, "a jerk")
+%
+%   foo?         			-> get("foo")
+%		what is foo  			-> get("foo")
+%		what is foo? 			-> get("foo")
+%		who are you? 			-> get(MyNick)
+%   what am i?   			-> get(FooNick)
+%   wtf is this? 			-> get("this")
+%   are you sure? 		-> get("you sure")
+%		where is FooNick? -> get("FooNick")
+%
 
 -module(def).
 -author("pizza@parseerror.com").
@@ -20,41 +40,6 @@ test() ->
 
 loop() ->
 	receive
-		% dict get
-		{act, Pid, Irc, Msg, Dst, Nick, ["how", "is" | Term]} ->
-			dict_get(Pid, Irc, Msg, Dst, Nick, "is", Term),
-			loop();
-		{act, Pid, Irc, Msg, Dst, Nick, ["what", "is" | Term]} ->
-			dict_get(Pid, Irc, Msg, Dst, Nick, "is", Term),
-			loop();
-		{act, Pid, Irc, Msg, Dst, Nick, ["who", "is" | Term]} ->
-			dict_get(Pid, Irc, Msg, Dst, Nick, "is", Term),
-			loop();
-		{act, Pid, Irc, Msg, Dst, Nick, ["how", "are" | Term]} ->
-			dict_get(Pid, Irc, Msg, Dst, Nick, "are", Term),
-			loop();
-		{act, Pid, Irc, Msg, Dst, Nick, ["what", "are" | Term]} ->
-			dict_get(Pid, Irc, Msg, Dst, Nick, "are", Term),
-			loop();
-		{act, Pid, Irc, Msg, Dst, Nick, ["who", "are" | Term]} ->
-			dict_get(Pid, Irc, Msg, Dst, Nick, "is", Term),
-			loop();
-		{act, Pid, Irc, Msg, Dst, Nick, ["what", "am" | Term]} ->
-			dict_get(Pid, Irc, Msg, Dst, Nick, "are", Term),
-			loop();
-		{act, Pid, Irc, Msg, Dst, Nick, ["who", "am" | Term]} ->
-			dict_get(Pid, Irc, Msg, Dst, Nick, "is", Term),
-			loop();
-		% dict store
-		{act, Pid, Irc, Msg, Dst, Nick, [Term, "is" | Rest]} ->
-			dict_set(Pid, Irc, Msg, Dst, Nick, Term, Rest),
-			loop();
-		{act, Pid, Irc, Msg, Dst, Nick, [Term, "are" | Rest]} ->
-			dict_set(Pid, Irc, Msg, Dst, Nick, Term, Rest),
-			loop();
-		{act, Pid, Irc, Msg, Dst, Nick, [Term, "am" | Rest]} ->
-			dict_set(Pid, Irc, Msg, Dst, Nick, Term, Rest),
-			loop();
 		% dict forget
 		{act, Pid, Irc, _, Dst, Nick, ["forget" | Term]} ->
 			dict_forget(Pid, Irc, Dst, Nick, Term),
@@ -69,11 +54,13 @@ loop() ->
 		{act, Pid, Irc, Msg, Dst, Nick, ["what", "do", "you", "know?"]} ->
 			dict_list(Pid, Irc, Msg, Dst, Nick),
 			loop();
-		{act, _, _, _, _, _, _} ->
+		% scan all lines for possible queries or definitions
+		{act, Pid, Irc, Msg, Dst, Nick, Txt} ->
+			multiword(Pid, Irc, Msg, Dst, Nick, Txt),
 			loop();
 		% help
 		{help, Pid, Dst, Nick} ->
-			Pid ! { q, 
+			Pid ! { pipe, 
 				[ irc:resp(Dst, Nick, Nick ++ ": " ++ Txt) || Txt <-
 					[
 						"[Term, \"is\" | Def]   -> remember Term => Def",
@@ -84,32 +71,113 @@ loop() ->
 			loop()
 	end.
 
+multiword(_Pid, _Irc, _Msg, _Dst, _Nick, []) -> nil;
+multiword(Pid, Irc, Msg, Dst, Nick, [First,Second|Rest]=Txt) ->
+	case ircutil:isquestion(Txt) of
+		true -> % ends in a question mark
+			{D,Connect,Term}=termdef(ircutil:dequestion(Txt)),
+			question(Pid, Irc, Msg, Dst, Nick, {D,Connect,Term});
+		false ->
+			case qword(First) of
+				true -> % starts with a question-type word
+					question(Pid, Irc, Msg, Dst, Nick, {First,Second,Rest});
+				false ->
+					case termdef(Txt) of
+						{_,_,[]} -> 0;
+						{[],Connect,Def} -> question(Pid, Irc, Msg, Dst, Nick, {[], Connect, Def});
+			  		Foo -> answer(Pid, Irc, Msg, Dst, Nick, Foo) 
+					end
+			end
+	end;
+multiword(Pid, Irc, Msg, Dst, Nick, Txt) -> % too short, append
+	case ircutil:isquestion(Txt) of
+		true -> % ends in a question mark
+			{D,Connect,Term}=termdef(ircutil:dequestion(Txt)),
+			question(Pid, Irc, Msg, Dst, Nick, {D,Connect,Term});
+		false -> nil
+	end.
+
+% does a question begin with this word?
+qword("why")	-> true;
+qword("what")	-> true;
+qword("how")	-> true;
+qword("who")	-> true;
+qword("are")	-> true;
+qword("am")		-> true;
+qword("is")		-> true;
+qword("wtf")	-> true;
+qword(_)			-> false.
+
+% is this a connection between a term and a def, or a leading question word?
+connector("are")	-> true;
+connector("is")		-> true;
+connector("am")		-> true;
+connector(_)			-> false.
+
+termdef(Txt) ->
+	{Term,Def} =
+		lists:splitwith(
+			fun(Word) -> not connector(Word) end, Txt),
+	{Connect,Def2} =
+		if
+			Def == [] ->
+				{"",""};
+			true ->
+				[H|T] = Def,
+				{H,T}
+		end,
+	io:format("termdef(~p) -> {~p,~p,~p}~n", [Txt,Term,Connect,Def2]),
+	{Term,Connect,Def2}.
+
+%termdef(["git","reset","--hard"]) -> {["git","reset","--hard"],[],[]}
+%question(Connect=[], Txt=[])
+
+question(Pid, Irc, Msg, Dst, Nick, {Def, [], []}) ->
+	io:format("question(Def=~p)~n", [Def]),
+	dict_get(Pid, Irc, Msg, Dst, Nick, "is", Def);
+question(Pid, Irc, Msg, Dst, Nick, {_, Connect, Txt}) ->
+	io:format("question(Connect=~p, Txt=~p)~n", [Connect, Txt]),
+	dict_get(Pid, Irc, Msg, Dst, Nick, Connect, Txt).
+
+answer(_Pid, _Irc, _Msg, _Dst, _Nick, {[],_,_}) ->
+	nil;
+answer(_Pid, _Irc, _Msg, _Dst, _Nick, {_,_,[]}) ->
+	nil;
+answer(Pid, Irc, _Msg, _Dst, Nick, {Term,_,Def}) ->
+	if
+		length(Term) =< 3 ->
+			io:format("answer(Term=~p, Def=~p)~n", [Term, Def]),
+			dict_set(Pid, Irc, Nick, Term, Def);
+		true ->
+			nil
+	end.
+
 % store Key -> Val mapping in dictionary
 % NOTE: translations:
 %		"you" -> "i" ("what are you?" -> "i am ...")
 %		"i" -> Nick ("i am tired" -> Nick ++ " is tired")
-dict_set(Pid, Irc, _, _, _Nick, "you", Rest) ->
-	dict_set_(Pid, Irc, "i", Rest);
-dict_set(Pid, Irc, _, _, Nick, "i", Rest) ->
-	dict_set_(Pid, Irc, Nick, Rest);
-dict_set(Pid, Irc, Msg, Dst, Nick, Term, Rest) ->
-	case ircutil:isquestion(Rest) of
-		true -> dict_get(Pid, Irc, Msg, Dst, Nick, "are", Term);
-		false -> dict_set_(Pid, Irc, Term, Rest)
-		end.
+dict_set(_Pid, _Irc, _Nick, ["Karma", "for" | _], _Rest) ->
+	nil; % avoid mod_spox's karma reports(!)
+dict_set(Pid, Irc, _Nick, ["you"], Rest) ->
+	dict_set_(Pid, Irc, ["i"], Rest);
+dict_set(Pid, Irc, Nick, ["i"], Rest) ->
+	dict_set_(Pid, Irc, [Nick], Rest);
+dict_set(Pid, Irc, _Nick, Term, Rest) ->
+	dict_set_(Pid, Irc, Term, Rest).
 
 dict_set_(Pid, Irc, Term, Rest) ->
+	io:format("dict_set_(Term=~p, Rest=~p)~n", [Term,Rest]),
 	Is = irc:state(Irc, is, dict:new()),
-	Term2 = dict_term([Term]),
-	Val = util:j(Rest),
+	Term2 = dict_term(Term),
+	Val = ircutil:dotdotdot(util:j(Rest), 100),
 	io:format("dict_set Term2=~p Val=~p~n", [Term2, Val]),
 	Is2 = dict:store(string:to_lower(Term2), Val, Is),
 	Pid ! {setstate, is, Is2}.
 
 % retrieve Key -> Val mapping in dictionary
 % NOTE: translate between "you" <-> "i", i.e. "what are you?" -> "i am ..."
-dict_get(Pid, Irc, Msg, Dst, Nick, _Connect, ["you?"]) ->
-	dict_get(Pid, Irc, Msg, Dst, Nick, "am", ["i"]);
+dict_get(Pid, Irc, Msg, Dst, Nick, _Connect, ["i"]) ->
+	dict_get(Pid, Irc, Msg, Dst, Nick, "is", [Nick]);
 dict_get(Pid, Irc, Msg, Dst, Nick, _Connect, ["you"]) ->
 	dict_get(Pid, Irc, Msg, Dst, Nick, "am", ["i"]);
 dict_get(Pid, Irc, Msg, Dst, Nick, Connect, Term) ->
@@ -118,7 +186,7 @@ dict_get(Pid, Irc, Msg, Dst, Nick, Connect, Term) ->
 	case dict:find(string:to_lower(Term2), Is) of
 		error -> nil;
 		{ok, X} ->
-			Answer = Term2 ++ " " ++ Connect ++ " " ++ X,
+			Answer = X,
 			io:format("dict_get Term2=~p Answer=~p~n",
 				[Term2, Answer]),
 			Pid ! { pipe, Msg, irc:resp(Dst, Nick, Nick ++ ": " ++ Answer) }
@@ -135,15 +203,18 @@ dict_forget(Pid, Irc, Dst, Nick, Term) ->
 
 % normalize a dictionary Term i.e. key
 dict_term(Term) ->
-	J = util:join("", Term),
-	Deq = lists:flatten(ircutil:dequestion([J])),
+	Deq = util:j(Term),
 	io:format("dict_term(~p) -> ~p~n", [Term, Deq]),
 	Deq.
 
 % list all the topics i know about
 dict_list(Pid, Irc, Msg, Dst, Nick) ->
 	Is = irc:state(Irc, is, dict:new()),
-	Answer = util:j([ K || {K,_} <- lists:sort(dict:to_list(Is)) ]),
+	Answer = util:j([
+		case string:str(K, " ") of
+			0 -> K;
+			_ -> "(" ++ K ++ ")"
+		end || {K,_} <- lists:sort(dict:to_list(Is)) ]),
 	io:format("dict_list=~s~n", [Answer]),
 	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Answer) }.
 

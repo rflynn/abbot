@@ -40,16 +40,13 @@ loop() ->
           [ "[\"translate\", From, To | Txt ] -> Translate Txt From to To",
           	%"[\"translate\", \"attach\", Who, From, To] -> Automatically Translate To/From for Who",
             "Lang = [" ++ util:join(",", [ Short || {Short,_} <- langs() ]) ++ "]",
-						"Example: translate en es hello"
+						"Example: translate en es hello",
+						"NOTE: not all languages work in both directions"
 					]
 				]},
 			loop()
 	end.
 
-xl(Pid, _, Msg, Dst, Nick, "engrish", "en", Txt_) ->
-	Txt = util:j(Txt_),
-	Result = charswap(Txt, [], $l, $r),
-	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Result) };
 xl(Pid, _, Msg, Dst, Nick, "en", "engrish", Txt_) ->
 	Txt = util:j(Txt_),
 	Result = charswap(Txt, [], $l, $r),
@@ -62,11 +59,18 @@ xl(Pid, _, Msg, Dst, Nick, "aol", "en", Txt_) ->
 	Txt = util:j(Txt_),
 	Result = aol_en(Txt),
 	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Result) };
+xl(Pid, _Irc, Msg, Dst, Nick, "chat", "en", Txt) ->
+	% TODO: don't reload the file fresh every time, sheesh
+	% plugins should have an "init" function or sumthn
+	% where they load data into Irc's state
+	Dict = load_internet_slang("data/translate/chat"),
+	Result = util:j(internet_slang(Txt, [], Dict)),
+	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Result)};
 xl(Pid, _Irc, Msg, Dst, Nick, "/b/", "en", Txt) ->
 	% TODO: don't reload the file fresh every time, sheesh
 	% plugins should have an "init" function or sumthn
 	% where they load data into Irc's state
-	Dict = load_internet_slang(),
+	Dict = load_internet_slang("data/translate/internet-slang"),
 	Result = util:j(internet_slang(Txt, [], Dict)),
 	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Result)};
 xl(Pid, _Irc, Msg, Dst, Nick, From, To, Txt_) ->
@@ -144,6 +148,7 @@ langs() ->
 	[
 		{ "aol","Aolspeak"			},
 		{ "/b/","/b/speak"			},
+		{ "chat", "Chat/IM/Txt"	},
 		{ "de", "German"				},
 		{ "el", "Greek"					},
 		{ "engrish","Engrish"		},
@@ -220,9 +225,9 @@ aol_en([R|Rd], Wr) -> aol_en(Rd, Wr ++ [R]).
 % "HELO HOW R U??!?! WTF IM FIEN!11!1!11 WTF"
 % "OMG I M SO FCKIG AWSUM!!!!!1 CUM WURSHP MEE BCH!!!!!1" 
 
-load_internet_slang() ->
+load_internet_slang(Path) ->
 	parse_internet_slang(util:readlines(util:relpath(
-		"translate.erl", "data/translate/internet-slang")), dict:new()).
+		"translate.erl", Path)), dict:new()).
 
 parse_internet_slang([], Dict) ->
 	Dict;

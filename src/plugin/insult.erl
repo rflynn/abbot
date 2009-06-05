@@ -23,7 +23,13 @@ loop() ->
 			insult(Pid, Irc, Msg, Dst, Nick, ""),
 			loop();
 		{ act, Pid, Irc, Msg, Dst, Nick, ["insult", Who]} ->
-			insult(Pid, Irc, Msg, Dst, Nick, Who),
+			if
+				Who == (Irc#ircconn.user)#ircsrc.nick ->
+					% don't insult my bot
+					insult(Pid, Irc, Msg, Dst, Nick, Nick);
+				true ->
+					insult(Pid, Irc, Msg, Dst, Nick, Who)
+			end,
 			loop();
 		{ act, Pid, Irc, Msg, Dst, Nick, ["insult", Who, "mom"]} ->
 			yourmom(Pid, Irc, Msg, Dst, Nick, Who),

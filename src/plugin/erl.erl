@@ -75,7 +75,8 @@ exec(Code) ->
 		string,
 			substr,
 		io_lib,
-			format
+			format,
+		o_O % irc fun
 	]).
 
 % HOW TO ALLOW A SAFE SUBSET:
@@ -100,6 +101,7 @@ is_naughty(Tok) ->
 		fun(X) -> erl:filter(X) end, Tok).
 
 enumerate_naughty(Tok) ->
+	% TODO: cleanup via list comprehensions
 	R1 = lists:map(fun(X) -> {X,erl:filter(X)} end, Tok),
 	R2 = lists:filter(fun({_,Y}) -> Y =:= true end, R1),
 	R3 = lists:map(
