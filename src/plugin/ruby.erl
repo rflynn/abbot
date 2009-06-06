@@ -12,6 +12,7 @@
 	eval_oops/1,
 	escape/1
 	]).
+-include_lib("../irc.hrl").
 -import(test).
 -import(irc).
 
@@ -32,7 +33,7 @@ test() ->
 loop() ->
 	receive
 		{act, Pid, _Irc, Msg, Dst, Nick, ["ruby" | Code]} ->
-			act(Pid, Msg, Dst, Nick, Code),
+			act(Pid, Msg, Dst, Nick, Msg),
 			loop();
 		{act, _, _, _, _, _, _ } ->
 			loop();
@@ -50,8 +51,10 @@ loop() ->
 	end.
 
 % evaluate the input as ruby source code
-act(Pid, Msg, Dst, Nick, Code) ->
-	Source = util:j(Code),
+act(Pid, Msg, Dst, Nick, Msg) ->
+	Rawtxt = Msg#ircmsg.rawtxt,
+	Source = string:substr(Rawtxt, length("ruby ")),
+	io:format("ruby Source=~p~n", [Source]),
 	Output = ruby:eval(Source), % we get at most one line of output
 	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Output)}.
 

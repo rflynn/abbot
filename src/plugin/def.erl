@@ -180,7 +180,7 @@ dict_get(Pid, Irc, Msg, Dst, Nick, _Connect, ["i"]) ->
 	dict_get(Pid, Irc, Msg, Dst, Nick, "is", [Nick]);
 dict_get(Pid, Irc, Msg, Dst, Nick, _Connect, ["you"]) ->
 	dict_get(Pid, Irc, Msg, Dst, Nick, "am", ["i"]);
-dict_get(Pid, Irc, Msg, Dst, Nick, Connect, Term) ->
+dict_get(Pid, Irc, Msg, Dst, Nick, _Connect, Term) ->
 	Is = irc:state(Irc, is, dict:new()),
 	Term2 = dict_term(Term),
 	case dict:find(string:to_lower(Term2), Is) of

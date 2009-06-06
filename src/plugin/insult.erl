@@ -38,10 +38,10 @@ loop() ->
 			yourmom(Pid, Irc, Msg, Dst, Nick, Who),
 			loop();
 		{ act, Pid, Irc, Msg, Dst, Nick, ["your", "mom"]} ->
-			yourmom(Pid, Irc, Msg, Dst, Nick, Nick),
+			yourmom(Pid, Irc, Msg, Dst, Nick, "your"),
 			loop();
 		{ act, Pid, Irc, Msg, Dst, Nick, ["yo", "momma"]} ->
-			yourmom(Pid, Irc, Msg, Dst, Nick, Nick),
+			yourmom(Pid, Irc, Msg, Dst, Nick, "yo"),
 			loop();
 		{ act, Pid, Irc, Msg, Dst, Nick, ["retort"]} ->
 			insult(Pid, Irc, Msg, Dst, Nick, ""),

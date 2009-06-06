@@ -14,6 +14,7 @@
 		ltrim/3, ltrim/2, ltrim/1,
 		trim/2, trim/1,
 		split/3,
+		strsplit/2,
 		tokens/3,
 		show/1,
 		nth/3,
@@ -36,7 +37,8 @@ test() ->
 			{ unescape, test_unescape()		},
 			{ nth, 			test_nth()				},
 			{ split, 		test_split()			},
-			{ tokens,		test_tokens()			}
+			{ tokens,		test_tokens()			},
+			{	strsplit,	test_strsplit()		}
 		]).
 
 hd([], Else) -> Else;
@@ -228,7 +230,6 @@ test_tokens() ->
 			["pizza_!~pizza_@a.b.c.d", "PRIVMSG", "#foo", ":mod_pizza_: whoops is a:, b"] }
 	].
 
-
 % show X in the most human-friendly way
 show(X) ->
 	lists:flatten(io_lib:format("~p", [X])).
@@ -319,4 +320,55 @@ ensure_dir(Dir) ->
 		{error, eexist} -> true;
 		Whoops -> Whoops
 	end.
+
+% split a string by another string
+strsplit([], _) ->
+	[[]];
+strsplit(A, A) ->
+	[[]];
+strsplit(Str, Split) ->
+	strsplit(Str, Split, [], []).
+
+% util:strsplit("ab",[],[],[])
+strsplit([],  _, List, []) -> List; % empty string
+strsplit([],  _, List, Unsplit) -> List ++ [ Unsplit ]; % end of non-empty string
+strsplit([StrH|StrT], [SplitH|_]=Split, List, Unsplit) when StrH /= SplitH ->
+	strsplit(StrT, Split, List, Unsplit ++ [StrH]);
+strsplit([StrH|StrT], [], List, _) ->
+	strsplit(StrT, [], List ++ [[StrH]], []);
+strsplit([StrH|StrT]=Str, [SplitH|_]=Split, List, Unsplit) when StrH =:= SplitH ->
+	case lists:prefix(Split, Str) of
+		false -> strsplit(StrT, Split, List, Unsplit ++ [StrH]);
+		true -> strsplit(lists:nthtail(length(Split), Str), Split, List ++ [Unsplit], [])
+	end.
+
+test_strsplit() ->
+	[
+		{ [ "", "" ], [ "" ] },
+		{ [ "", "x" ], [ "" ] },
+		{ [ "a", "a" ], [ "" ] },
+		{ [ "ab", "" ], [ "a","b" ] },
+		{ [ "ab", "ab" ], [ "" ] },
+		{ [ "ab", "abc" ], [ "ab" ] },
+		{ [ "ab", "a" ], [ "","b" ] }, % hmm
+		{ [ "a-b", "-" ], [ "a","b" ] },
+		{ [ "a--b", "--" ], [ "a","b" ] },
+		{ [ "a---b", "---" ], [ "a","b" ] },
+		{ [ "a-b-c", "-" ], [ "a","b","c" ] },
+		{ [ "", " | " ], [ "" ] },
+		{ [ " ", " | " ], [ " " ] },
+		{ [ " |", " | " ], [ " |" ] },
+		{ [ " | ", " | " ], [ "" ] },
+		{ [ "a | ", " | " ], [ "a" ] },
+		{ [ "a | b", " | " ], [ "a", "b" ] },
+		{ [ "a | b ", " | " ], [ "a", "b " ] },
+		{ [ "a | b |", " | " ], [ "a", "b |" ] },
+		{ [ "a | b | ", " | " ], [ "a", "b" ] },
+		{ [ "|x|", " | " ], [ "|x|" ] },
+		{ [ " |x|", " | " ], [ " |x|" ] },
+		{ [ "  |x|", " | " ], [ "  |x|" ] },
+		{ [ "  |x| ", " | " ], [ "  |x| " ] },
+		{ [ "  |x|  ", " | " ], [ "  |x|  " ] },
+		{ [ "", "" ], [ "" ] }
+	].
 

@@ -161,7 +161,7 @@ pipe_parse(#ircmsg{rawtxt=[]}=Msg) ->
 	Msg;
 pipe_parse(#ircmsg{rawtxt=Rawtxt}=Msg) ->
 	[ First | Rest ] =
-		[ util:trim(P) || P <- string:tokens(Rawtxt, "|") ],
+		[ util:trim(P) || P <- util:strsplit(Rawtxt, " | ") ],
 	Msg2 = Msg#ircmsg{
 		txt = string:tokens(First, " "),
 		rawtxt=First,
