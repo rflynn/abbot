@@ -263,7 +263,8 @@ privmsg(
 			true ->
 				{Msg, All}
 		end,
-	do_privmsg(Plugins, Irc, Msg2, Dst, From, Txt).
+	do_privmsg(Plugins, Irc, Msg2, Dst, From, Txt);
+privmsg(_,_,_) -> nil. % catch-all
 
 do_privmsg(Plugins, Irc, _, Dst, From, ["help" | _]=Txt) ->
 	help(Irc, Plugins, Dst, From, Txt);

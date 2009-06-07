@@ -26,7 +26,7 @@ quote_path(File) ->
 
 loop() ->
 	receive
-		{ act, Pid, Irc, _Msg, Dst, Nick, ["quote", _ | _]=Txt} ->
+		{ act, Pid, Irc, _Msg, Dst, Nick, ["quote" | _]=Txt} ->
 			quote(Pid, Irc, _Msg, Dst, Nick, Txt),
 			loop();
 		{ act, _, _, _, _, _, _ } ->
@@ -36,7 +36,16 @@ loop() ->
 			loop()
 	end.
 
-quote(Pid, Irc, _Msg, Dst, Nick, ["quote", Who | Search]) ->
+% random quote, random topic
+quote(Pid, Irc, _Msg, Dst, Nick, ["quote"]) ->
+	Who = quotefiles(),
+	{S1, S2, S3} = now(),
+	random:seed(S1, S2, S3),
+	Topic = lists:nth(random:uniform(length(Who)), Who),
+	quote(Pid, Irc, _Msg, Dst, Nick, ["quote", Topic]);
+
+% random quote, certain topic
+quote(Pid, Irc, Msg, Dst, Nick, ["quote", Who | Search]) ->
 	Search2 = util:j(Search),
 	Someone = Who,
 	io:format("quote Someone=~p Search2=~p~n", [Someone, Search2]),
@@ -62,25 +71,27 @@ quote(Pid, Irc, _Msg, Dst, Nick, ["quote", Who | Search]) ->
 					random:seed(S1, S2, S3),
 					Quote = util:rtrim( % trim newline
 						lists:nth(random:uniform(length(Quotes)), Quotes), 10),
-					Pid ! {q, irc:resp(Dst, Nick, Quote)}
+					Pid ! {pipe, Msg, irc:resp(Dst, Nick, Quote)}
 			end
 	end.
 
+% list quotefiles
+quotefiles() ->
+	case file:list_dir(quote_path()) of
+		{ok, List} ->
+			lists:filter( % disregard dot-files, sort
+				fun(C) ->
+					([] /= C) and (lists:nth(1, C) /= $.) end,
+				lists:sort(List));
+		{error, _} -> []
+	end.
+
 help(Pid, Dst, Nick) ->
-	Who = % list quotefiles
-		case file:list_dir(quote_path()) of
-			{ok, List} ->
-				lists:filter( % disregard dot-files, sort
-					fun(C) ->
-						(length(C) > 0) and
-						(lists:nth(1, C) /= $.)
-					end,
-					lists:sort(List));
-			{error, _} -> []
-		end,
+	Who = quotefiles(),
 	Pid ! { q,
 		[ irc:resp(Dst, Nick, Nick ++ ": " ++ Txt) || Txt <-
 			[
+				"[\"quote\"]               -> random quote, random topic",
 				"[\"quote\", Who | Search] -> random quote from Who, optionally containing Search",
 				"Who = [" ++ util:join(",", Who) ++ "]"
 			]

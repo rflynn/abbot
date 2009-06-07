@@ -31,8 +31,8 @@ loop() ->
 		{help, Pid, Dst, Nick} ->
 			Pid ! {q,
 				[	irc:resp(Dst, Nick, Nick ++ ": " ++ Txt) || Txt <-
-					[ "[\"url\", Url] -> title and tinyurl report",
-					  "[\"url\", \"txt\" Url] -> URL text" ]
+					[ "[\"url\", Url] -> fetch URL and report",
+					  "[\"url\", \"txt\", Url] -> display page text" ]
 				]
 			},
 			loop()
@@ -67,11 +67,13 @@ txt_(Content) ->
 	io:format("Bin=~p~n", [Bin]),
 	Txt = [ binary_to_list(B) || B <- lists:flatten(Bin) ],
 	NoScript = lists:filter(
-		fun(Str) ->
-			(string:str(Str, "var ") == 0) and
-			(string:str(Str, "#") == 0) and
-			(string:str(Str, "{") == 0) and
-			(string:str(Str, "}") == 0)
+		fun(Str) -> % hack to disregard much CSS and javascript
+			(string:str(Str, "#")				== 0) and
+			(string:str(Str, "{")				== 0) and
+			(string:str(Str, "}")				== 0) and
+			(string:str(Str, "var ")		== 0) and
+			(string:str(Str, "if (")		== 0) and
+			(string:str(Str, "false;")	== 0)
 		end, Txt),
 	Txt2 = util:j(ircutil:stripjunk(NoScript)),
 	Txt3 = util:j(string:tokens(Txt2, "\r\n\t")),
@@ -137,11 +139,11 @@ isParsable([{Key,Val}|Rest]) ->
 	if
 		"content-type" == Key ->
 			(
-				 ("text/plain" == string:substr(Val, 1, 10))
-			or ("text/html" == string:substr(Val, 1, 9))
-			or ("text/xhtml" == string:substr(Val, 1, 10))
-			or ("text/xhtml+xml" == string:substr(Val, 1, 14))
-			or ("application/xhtml+xml" == string:substr(Val, 1, 21))
+				 (string:substr(Val, 1, 10) == "text/plain")
+			or (string:substr(Val, 1,  9) == "text/html")
+			or (string:substr(Val, 1, 10) == "text/xhtml")
+			or (string:substr(Val, 1, 14) == "text/xhtml+xml")
+			or (string:substr(Val, 1, 21) == "application/xhtml+xml")
 			);
 		true -> isParsable(Rest)
 	end.

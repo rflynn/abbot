@@ -322,24 +322,16 @@ ensure_dir(Dir) ->
 	end.
 
 % split a string by another string
-strsplit([], _) ->
-	[[]];
-strsplit(A, A) ->
-	[[]];
-strsplit(Str, Split) ->
-	strsplit(Str, Split, [], []).
-
-% util:strsplit("ab",[],[],[])
-strsplit([],  _, List, []) -> List; % empty string
-strsplit([],  _, List, Unsplit) -> List ++ [ Unsplit ]; % end of non-empty string
-strsplit([StrH|StrT], [SplitH|_]=Split, List, Unsplit) when StrH /= SplitH ->
-	strsplit(StrT, Split, List, Unsplit ++ [StrH]);
-strsplit([StrH|StrT], [], List, _) ->
-	strsplit(StrT, [], List ++ [[StrH]], []);
-strsplit([StrH|StrT]=Str, [SplitH|_]=Split, List, Unsplit) when StrH =:= SplitH ->
-	case lists:prefix(Split, Str) of
-		false -> strsplit(StrT, Split, List, Unsplit ++ [StrH]);
-		true -> strsplit(lists:nthtail(length(Split), Str), Split, List ++ [Unsplit], [])
+strsplit([], _)									-> [[]];
+strsplit(A, A)									-> [[]];
+strsplit(Str, Spl)							-> strsplit(Str, Spl, [], []).
+strsplit([], _, L, [])					-> L; % empty string
+strsplit([], _, L, U)						-> L ++ [U]; % end of non-empty string
+strsplit([H|T], [], L, _) 			-> strsplit(T, [], L ++ [[H]], []);
+strsplit([H|T]=Str, Spl, L, U)	->
+	case lists:prefix(Spl, Str) of
+		false -> strsplit(T, Spl, L, U ++ [H]);
+		true -> strsplit(lists:nthtail(length(Spl), Str), Spl, L ++ [U], [])
 	end.
 
 test_strsplit() ->

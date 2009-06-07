@@ -12,6 +12,7 @@
     restart/2
 	]).
 -define(dir,	 "plugin").
+-import(code).
 
 test() ->
   true.
@@ -39,6 +40,7 @@ load() ->
 % and return record
 run(Name) ->
 	Atom = list_to_atom(Name),
+	{module,_}=code:ensure_loaded(Atom),
 	case Atom:test() of
 		false ->
 			io:format("Unit tests failed, exiting.~n"),

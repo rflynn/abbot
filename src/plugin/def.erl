@@ -129,9 +129,6 @@ termdef(Txt) ->
 	io:format("termdef(~p) -> {~p,~p,~p}~n", [Txt,Term,Connect,Def2]),
 	{Term,Connect,Def2}.
 
-%termdef(["git","reset","--hard"]) -> {["git","reset","--hard"],[],[]}
-%question(Connect=[], Txt=[])
-
 question(Pid, Irc, Msg, Dst, Nick, {Def, [], []}) ->
 	io:format("question(Def=~p)~n", [Def]),
 	dict_get(Pid, Irc, Msg, Dst, Nick, "is", Def);
@@ -139,10 +136,8 @@ question(Pid, Irc, Msg, Dst, Nick, {_, Connect, Txt}) ->
 	io:format("question(Connect=~p, Txt=~p)~n", [Connect, Txt]),
 	dict_get(Pid, Irc, Msg, Dst, Nick, Connect, Txt).
 
-answer(_Pid, _Irc, _Msg, _Dst, _Nick, {[],_,_}) ->
-	nil;
-answer(_Pid, _Irc, _Msg, _Dst, _Nick, {_,_,[]}) ->
-	nil;
+answer(_Pid, _Irc, _Msg, _Dst, _Nick, {[],_,_}) -> nil;
+answer(_Pid, _Irc, _Msg, _Dst, _Nick, {_,_,[]}) -> nil;
 answer(Pid, Irc, _Msg, _Dst, Nick, {Term,_,Def}) ->
 	if
 		length(Term) =< 3 ->
@@ -156,7 +151,7 @@ answer(Pid, Irc, _Msg, _Dst, Nick, {Term,_,Def}) ->
 % NOTE: translations:
 %		"you" -> "i" ("what are you?" -> "i am ...")
 %		"i" -> Nick ("i am tired" -> Nick ++ " is tired")
-dict_set(_Pid, _Irc, _Nick, ["Karma", "for" | _], _Rest) ->
+dict_set(_Pid, _Irc, _Nick, ["Karma" | _], _Rest) ->
 	nil; % avoid mod_spox's karma reports(!)
 dict_set(Pid, Irc, _Nick, ["you"], Rest) ->
 	dict_set_(Pid, Irc, ["i"], Rest);
@@ -168,7 +163,7 @@ dict_set(Pid, Irc, _Nick, Term, Rest) ->
 dict_set_(Pid, Irc, Term, Rest) ->
 	io:format("dict_set_(Term=~p, Rest=~p)~n", [Term,Rest]),
 	Is = irc:state(Irc, is, dict:new()),
-	Term2 = dict_term(Term),
+	Term2 = util:j(Term),
 	Val = ircutil:dotdotdot(util:j(Rest), 100),
 	io:format("dict_set Term2=~p Val=~p~n", [Term2, Val]),
 	Is2 = dict:store(string:to_lower(Term2), Val, Is),
@@ -182,7 +177,7 @@ dict_get(Pid, Irc, Msg, Dst, Nick, _Connect, ["you"]) ->
 	dict_get(Pid, Irc, Msg, Dst, Nick, "am", ["i"]);
 dict_get(Pid, Irc, Msg, Dst, Nick, _Connect, Term) ->
 	Is = irc:state(Irc, is, dict:new()),
-	Term2 = dict_term(Term),
+	Term2 = util:j(Term),
 	case dict:find(string:to_lower(Term2), Is) of
 		error -> nil;
 		{ok, X} ->
@@ -195,26 +190,16 @@ dict_get(Pid, Irc, Msg, Dst, Nick, _Connect, Term) ->
 % 
 dict_forget(Pid, Irc, Dst, Nick, Term) ->
 	Is = irc:state(Irc, is, dict:new()),
-	Term2 = dict_term(Term),
+	Term2 = util:j(Term),
 	io:format("dict_forget Term=~p Term2=~p~n", [Term, Term2]),
 	Is2 = dict:erase(string:to_lower(Term2), Is),
 	Pid ! {setstate, is, Is2},
 	Pid ! {q, irc:resp(Dst, Nick, Nick ++ ": forgotten.") }.
 
-% normalize a dictionary Term i.e. key
-dict_term(Term) ->
-	Deq = util:j(Term),
-	io:format("dict_term(~p) -> ~p~n", [Term, Deq]),
-	Deq.
-
 % list all the topics i know about
 dict_list(Pid, Irc, Msg, Dst, Nick) ->
 	Is = irc:state(Irc, is, dict:new()),
-	Answer = util:j([
-		case string:str(K, " ") of
-			0 -> K;
-			_ -> "(" ++ K ++ ")"
-		end || {K,_} <- lists:sort(dict:to_list(Is)) ]),
+	Answer = util:join(",", [ K || {K,_} <- lists:sort(dict:to_list(Is)) ]),
 	io:format("dict_list=~s~n", [Answer]),
 	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Answer) }.
 

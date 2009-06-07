@@ -57,7 +57,7 @@ content(Url) ->
 		end.
 
 tinyurl(Url) ->
-	Url2 = "http://is.gd/api.php?longurl=" ++ Url,
+	Url2 = "http://tinyurl.com/api-create.php?url=" ++ Url,
 	{_Code, Content} = content(Url2),
 	if
 		is_atom(Content) -> Url; % original URL
