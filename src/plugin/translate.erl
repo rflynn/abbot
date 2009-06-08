@@ -25,7 +25,7 @@ test() ->
 
 loop() ->
 	receive
-		{ act, Pid, Irc, Msg, Dst, Nick, ["translate", Lang, Lang | Txt]} ->
+		{ act, Pid, _Irc, Msg, Dst, Nick, ["translate", Lang, Lang | Txt]} ->
 			% same language
 			Pid ! {pipe, Msg, irc:resp(Dst, Nick, Txt) },
 			loop();

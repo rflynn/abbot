@@ -32,7 +32,7 @@ test() ->
 % receive loop
 loop() ->
 	receive
-		{act, Pid, _Irc, Msg, Dst, Nick, ["ruby" | Code]} ->
+		{act, Pid, _Irc, Msg, Dst, Nick, ["ruby" | _]} ->
 			act(Pid, Msg, Dst, Nick, Msg),
 			loop();
 		{act, _, _, _, _, _, _ } ->

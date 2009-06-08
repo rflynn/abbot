@@ -11,7 +11,8 @@
 		dequestion/1,
 		stripjunk/1,
 		dotdotdot/2,
-		ltrim_nick/3
+		ltrim_nick/3,
+		strippunct/1
 	]).
 
 -include_lib("irc.hrl").
@@ -121,16 +122,16 @@ test_stripjunk() ->
 % example: "my_Nick: hello" -> "hello"
 ltrim_nick(Msg, Rawtxt, Nick) ->
 	Tok = string:tokens(Rawtxt, " :,"),
-	Rawtxt2 =
+	{ToMe, Rawtxt2} =
 		if
 			hd(Tok) == Nick ->
 					X1 = string:substr(Rawtxt, length(Nick)+1),
 					X2 = util:ltrim(X1, $,),
 					X3 = util:ltrim(X2, $:),
-					util:ltrim(X3, 32);
-			true -> Rawtxt
+					{true, util:ltrim(X3, 32)};
+			true -> {false, Rawtxt}
 			end,
-	Msg#ircmsg{rawtxt=Rawtxt2}.
+	Msg#ircmsg{rawtxt=Rawtxt2,tome=ToMe}.
 
 % trim a string at a maxlen, show "..." suffix if trimmed
 dotdotdot(Str, MaxLen) ->
@@ -141,4 +142,20 @@ dotdotdot(Str, MaxLen) ->
 		true ->
 			Str
 	end.
+
+
+% remove all unprintable chars from all words
+% in a wordlist; and remove any words that consisted
+% entirely of them
+strippunct([]) -> [];
+strippunct([[]]) -> [[]];
+strippunct([H|_]=Words) when is_list(H) ->
+	% filter punct chars
+	Strip =
+		lists:map(
+			fun(W) -> lists:filter(
+				fun(C) -> not char:ispunct(C) end, W) end,
+			Words),
+	% filter empty words
+	lists:filter(fun(W) -> W /= [] end, Strip).
 

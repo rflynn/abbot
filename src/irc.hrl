@@ -46,6 +46,7 @@
 		txt     = [],				% spoken contents, if any
     rawtxt  = "",   		% unparsed contents of 'txt'
     raw     = "",    		% unparsed msg contents
-		pipeline = []
+		pipeline = [],
+		tome    = false
 	}).
 

@@ -8,6 +8,7 @@
 	test/0,
 	parse/2, msgparse/1, str/1,
 	nick/1, user/1, privmsg/2, resp/3,
+	notice/4,
 	action/1, master/1,
 	is_chan/1, default_port/0,
 	state/3, setstate/3, state_save/1, state_load/0
@@ -99,6 +100,9 @@ str(#ircmsg{type="PRIVMSG"=Type, dst=Dst, txt=[], rawtxt=Rawtxt}) ->
 	Type ++ " " ++ Dst ++ " :" ++ Rawtxt ++ "\r\n";
 str(#ircmsg{type="PRIVMSG"=Type, dst=Dst, txt=Txt, rawtxt=""}) ->
 	Type ++ " " ++ Dst ++ " :" ++ util:j(Txt) ++ "\r\n";
+str(#ircmsg{type="NOTICE"=Type, src=Src, dst=Dst, rawtxt=Rawtxt}) ->
+	RawTo = Src#ircsrc.raw,
+	RawTo ++ " " ++ Type ++ " " ++ Dst ++ " :" ++ Rawtxt ++ "\r\n";
 str(#ircmsg{type="PONG"=Type, rawtxt=Raw}) ->
 	Type ++ " " ++ Raw ++ "\r\n";
 str(#ircmsg{type="JOIN"=Type, rawtxt=Rawtxt}) ->
@@ -148,6 +152,14 @@ resp(Dst, Src, Say) ->
 
 action(Str) ->
 	"\1" ++ "ACTION" ++ " " ++ Str ++ "\1".
+
+notice(_Irc, FromMsg, What, Say)	->
+	#ircmsg{
+		type = "NOTICE",
+		src = FromMsg#ircmsg.src,
+		dst = (FromMsg#ircmsg.src)#ircsrc.nick,
+		rawtxt = irc:action(What ++ " " ++ Say)
+	}.
 
 % is a destination a channel?
 % used to differentiate between channel messages and user messages

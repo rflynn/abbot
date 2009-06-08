@@ -59,12 +59,12 @@ conn(Host, Port, Plugins) ->
 	io:format("conn Host=~s Port=~p~n", [Host, Port]),
 	Irc = #ircconn{
 		host=Host, port=Port,
-		key=Host, server="blah",
-		real="blah",
+		key=Host, server="example.com",
+		real=?nick,
 		master=?master, pass=?pass,
 		state=irc:state_load(),
 		user=#ircsrc{
-			nick=?nick, user="blah", host="blah"}},
+			nick=?nick, user=?nick, host="example.com"}},
 	Pid = self(),
 	Reconnt = timer:apply_interval(
 		?reconn_interval, bot, reconnt, [Pid]),
@@ -244,7 +244,7 @@ react(Irc, #ircmsg{type=Type}, _) ->
 privmsg(
 	Irc,
 	#ircmsg{
-		type="PRIVMSG", dst=Dst,
+		dst=Dst,
 		src=#ircsrc{nick=From},
 		txt=[First|Rest]=All,
 		rawtxt=Rawtxt
@@ -254,18 +254,22 @@ privmsg(
 	First3 = util:rtrim(First2, $,),
 	{Msg2, Txt} =
 		if % are you talking to me? i don't see anyone else...
-			Dst == Me ->
-				{Msg, All};
-			First3 == Me ->
-				% chan privmsg where my nick is the first word
+			Dst == Me -> {Msg#ircmsg{tome=true}, All};
+			First3 == Me -> % chan privmsg where my nick is the first word
 				Msg3 = ircutil:ltrim_nick(Msg, Rawtxt, Me),
 				{Msg3, Rest};
-			true ->
-				{Msg, All}
+			true -> {Msg, All}
 		end,
 	do_privmsg(Plugins, Irc, Msg2, Dst, From, Txt);
-privmsg(_,_,_) -> nil. % catch-all
+privmsg(Irc, #ircmsg{dst=Dst,src=#ircsrc{nick=From},txt=Txt}=Msg, Plugins) ->
+	do_privmsg(Plugins, Irc, Msg, Dst, From, Txt).
 
+do_privmsg(_Plugins, Irc, Msg, _Dst, _From, ["VERSION" | _]) ->
+%20:47 [DALnet] [ctcp(pizza__)] VERSION
+%20:47 [DALnet] pizza__ [~pizza_@12.229.112.195] requested CTCP VERSION from pizza__:
+%20:47 [DALnet] CTCP VERSION reply from pizza__: irssi v0.8.10 - running on Linux i686
+	bot:q(Irc,
+		irc:notice(Irc, Msg, "VERSION", "irssi v0.8.10 - running on Linux i686"));
 do_privmsg(Plugins, Irc, _, Dst, From, ["help" | _]=Txt) ->
 	help(Irc, Plugins, Dst, From, Txt);
 do_privmsg(Plugins, Irc, Msg2, Dst, From, Txt) ->
