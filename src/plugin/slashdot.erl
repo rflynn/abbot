@@ -5,7 +5,7 @@
 -export([
 		test/0,
 		loop/0,
-		rss/4
+		rss/5
 	]).
 
 -include_lib("../irc.hrl").
@@ -23,11 +23,17 @@ test() ->
 
 loop() ->
 	receive
-		{act, Pid, _, _, Dst, Nick, ["slashdot", Cnt]} ->
-			rss(Pid, Dst, Nick, list_to_integer(Cnt)),
+		{act, Pid, _, Msg, Dst, Nick, ["slashdot", Cnt]} ->
+			rss(Pid, Msg, Dst, Nick, list_to_integer(Cnt)),
 			loop();
-		{act, Pid, _, _, Dst, Nick, ["slashdot"]} ->
-			rss(Pid, Dst, Nick, ?stories_default),
+		{act, Pid, _, Msg, Dst, Nick, ["slashdot"]} ->
+			rss(Pid, Msg, Dst, Nick, ?stories_default),
+			loop();
+		{act, Pid, _, Msg, Dst, Nick, ["/.", Cnt]} ->
+			rss(Pid, Msg, Dst, Nick, list_to_integer(Cnt)),
+			loop();
+		{act, Pid, _, Msg, Dst, Nick, ["/."]} ->
+			rss(Pid, Msg, Dst, Nick, ?stories_default),
 			loop();
 		{act, _, _, _, _, _, _} ->
 			loop();
@@ -39,15 +45,14 @@ loop() ->
 			loop()
 	end.
 
-rss(Pid, Dst, Nick, Cnt) ->
+rss(Pid, Msg, Dst, Nick, Cnt) ->
 	{Code, Content} = content(?rss_url),
-	io:format("rss Code=~p Content=~p~n",
-		[Code, Content]),
+	io:format("rss Code=~p Content=~p~n", [Code, Content]),
 	case Code of
 		error ->
 			Pid ! {q, irc:resp(Dst, Nick,
 				lists:flatten(io_lib:format("slashdot -> ~s", [Code])))};
-		_ -> ok(Pid, Dst, Nick, Cnt, Content)
+		_ -> ok(Pid, Msg, Dst, Nick, Cnt, Content)
 	end.
 
 content(Url) ->
@@ -65,20 +70,20 @@ tinyurl(Url) ->
 	end.
 
 % url fetch succeeded, display items
-ok(Pid, Dst, Nick, Cnt, Content) ->
+ok(Pid, Msg, Dst, Nick, Cnt, Content) ->
 	Cnt2 = util:min(Cnt, ?stories_max),
 	Items = rss_items(Content),
 	io:format("Cnt2=~p Items=~p~n", [Cnt2, Items]),
 	% because tinyurl() could timeout, send the responses one
   % at a time for better interactivity
-	[
-		Pid ! {q,
+	Pid ! {pipe, Msg,
+		[
 			irc:resp(Dst, Nick,
 				lists:flatten(
 					io_lib:format("/. ~-55s ~s",
 						[ ircutil:dotdotdot(cgi:entity_decode(Title), 55), tinyurl(Url)])))
-		} || [Title,_Descr,Url] <- string:substr(Items, 1, Cnt2)
-	].
+			|| [Title,_Descr,Url] <- string:substr(Items, 1, Cnt2)
+		] }.
 
 % given an rss document, return all items in the format:
 % [["Title","Descr","Url"]|Rest]

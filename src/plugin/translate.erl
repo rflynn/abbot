@@ -25,6 +25,10 @@ test() ->
 
 loop() ->
 	receive
+		{ act, Pid, Irc, Msg, Dst, Nick, ["translate", Lang, Lang | Txt]} ->
+			% same language
+			Pid ! {pipe, Msg, irc:resp(Dst, Nick, Txt) },
+			loop();
 		{ act, Pid, Irc, Msg, Dst, Nick, ["translate", FromLang, ToLang | Txt]} ->
 			xl(Pid, Irc, Msg, Dst, Nick, FromLang, ToLang, Txt),
 			loop();

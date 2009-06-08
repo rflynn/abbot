@@ -6,6 +6,7 @@
 -author("pizza@parseerror.com").
 -export(
 	[
+		test/0,
 		relpath/2,
 		hd/2,
 		min/2,
@@ -23,7 +24,8 @@
 		utime_diffsec/2,
 		readlines/1,
 		ensure_dir/1,
-		test/0
+		hex/1,
+		hex/2
 	]).
 -import(test).
 
@@ -38,7 +40,9 @@ test() ->
 			{ nth, 			test_nth()				},
 			{ split, 		test_split()			},
 			{ tokens,		test_tokens()			},
-			{	strsplit,	test_strsplit()		}
+			{	strsplit,	test_strsplit()		},
+			{	hex,			test_hex()				},
+			{	hex,			test_hex2()				}
 		]).
 
 hd([], Else) -> Else;
@@ -362,5 +366,60 @@ test_strsplit() ->
 		{ [ "  |x| ", " | " ], [ "  |x| " ] },
 		{ [ "  |x|  ", " | " ], [ "  |x|  " ] },
 		{ [ "", "" ], [ "" ] }
+	].
+
+% produce hex representation of digit
+hex(0) -> "0";
+hex(N) -> hex_(N, []).
+hex_(0, Acc) -> Acc;
+hex_(N, Acc) ->
+	Hex = lists:nth((N band 15) + 1, "0123456789abcdef"),
+	hex_(N bsr 4, [Hex] ++ Acc).
+
+test_hex() ->
+	[
+		{ [   0 ], "0"  },
+		{ [   1 ], "1"   },
+		{ [   9 ], "9"   },
+		{ [  10 ], "A"   },
+		{ [  11 ], "B"   },
+		{ [  12 ], "C"   },
+		{ [  13 ], "D"   },
+		{ [  14 ], "E"   },
+		{ [  15 ], "F"   },
+		{ [  16 ], "10"  },
+		{ [ 255 ], "FF"  },
+		{ [ 256 ], "100" }
+	].
+
+% produce dec->hex to a certain size
+hex(_, 0) -> "";
+hex(N, Places) when Places > 0 -> hex_(N, Places, []).
+hex_(_, 0, Acc) -> Acc;
+hex_(N, Places, Acc) ->
+	Hex = lists:nth((N band 15)+1, "0123456789abcdef"),
+	hex_(N bsr 4, Places-1, [Hex] ++ Acc).
+
+test_hex2() ->
+	[
+		{ [   0, 0 ], ""    },
+		{ [   1, 0 ], ""    },
+		{ [   0, 1 ], "0"   },
+		{ [   0, 2 ], "00"  },
+		{ [   0, 3 ], "000" },
+		{ [   1, 1 ], "1"   },
+		{ [   9, 1 ], "9"   },
+		{ [   9, 2 ], "09"  },
+		{ [  10, 1 ], "A"   },
+		{ [  10, 2 ], "0A"  },
+		{ [  11, 1 ], "B"   },
+		{ [  12, 1 ], "C"   },
+		{ [  13, 1 ], "D"   },
+		{ [  14, 1 ], "E"   },
+		{ [  15, 1 ], "F"   },
+		{ [  16, 1 ], "0"   },
+		{ [  16, 2 ], "10"  },
+		{ [ 255, 2 ], "FF"  },
+		{ [ 256, 3 ], "100" }
 	].
 
