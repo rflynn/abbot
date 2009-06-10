@@ -163,7 +163,7 @@ dict_set(Pid, Irc, _Nick, Term, Rest) ->
 dict_set_(Pid, Irc, Term, Rest) ->
 	io:format("dict_set_(Term=~p, Rest=~p)~n", [Term,Rest]),
 	Is = irc:state(Irc, is, dict:new()),
-	Term2 = util:j(Term),
+	Term2 = util:trim(util:j(Term)),
 	Val = ircutil:dotdotdot(util:j(Rest), 100),
 	io:format("dict_set Term2=~p Val=~p~n", [Term2, Val]),
 	Is2 = dict:store(string:to_lower(Term2), Val, Is),
@@ -177,7 +177,7 @@ dict_get(Pid, Irc, Msg, Dst, Nick, _Connect, ["you"]) ->
 	dict_get(Pid, Irc, Msg, Dst, Nick, "am", ["i"]);
 dict_get(Pid, Irc, Msg, Dst, Nick, _Connect, Term) ->
 	Is = irc:state(Irc, is, dict:new()),
-	Term2 = util:j(Term),
+	Term2 = util:trim(util:j(Term)),
 	case dict:find(string:to_lower(Term2), Is) of
 		error -> nil;
 		{ok, X} ->
@@ -190,7 +190,7 @@ dict_get(Pid, Irc, Msg, Dst, Nick, _Connect, Term) ->
 % 
 dict_forget(Pid, Irc, Dst, Nick, Term) ->
 	Is = irc:state(Irc, is, dict:new()),
-	Term2 = util:j(Term),
+	Term2 = util:trim(util:j(Term)),
 	io:format("dict_forget Term=~p Term2=~p~n", [Term, Term2]),
 	Is2 = dict:erase(string:to_lower(Term2), Is),
 	Pid ! {setstate, is, Is2},

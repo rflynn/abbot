@@ -40,7 +40,7 @@ loop() ->
 quote(Pid, Irc, _Msg, Dst, Nick, ["quote"]) ->
 	Who = quotefiles(),
 	{S1, S2, S3} = now(),
-	random:seed(S1, S2, S3),
+	random:seed(S3, S3, S3),
 	Topic = lists:nth(random:uniform(length(Who)), Who),
 	quote(Pid, Irc, _Msg, Dst, Nick, ["quote", Topic]);
 

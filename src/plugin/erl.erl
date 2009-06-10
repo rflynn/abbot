@@ -76,6 +76,8 @@ exec(Code) ->
 			substr,
 		io_lib,
 			format,
+		math,
+			pow, sin, cos, tan, asin, acos, atan, atan2, sinh, cosh, tanh, asinh, acosh, atanh, exp, log, log10, pow, sqrt, pi,
 		o_O % irc fun
 	]).
 

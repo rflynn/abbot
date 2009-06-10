@@ -64,10 +64,14 @@ isgreeting(#ircmsg{tome=true}, _, [First|_]) ->
 	greeting([First]);
 isgreeting(#ircmsg{tome=false}, MyNick, [First|_]=Txt) ->
 	io:format("isgreeting !tome First=~p~n", [First]),
-	(greeting([First]) and (lists:last(Txt) == MyNick));
+	(greeting([First]) and
+		lists:any(fun(Part) -> lists:last(Txt) == Part end, nickparts(MyNick)));
 isgreeting(_, _, Txt) ->
 	io:format("isgreeting something else... Txt=~p~n", [Txt]),
 	false.
+
+nickparts(MyNick) ->
+	string:tokens(MyNick, " |_,").
 
 any(List) ->
 	{S1, S2, S3} = now(),
@@ -98,13 +102,17 @@ resp(Nick, say, Txt) ->
 resp(_, act, Txt) -> irc:action(Txt).
 
 % is this a greeting?
-greeting(["hello"])			-> true;
-greeting(["greeting"])	-> true;
-greeting(["greetings"])	-> true;
 greeting(["hi"])				-> true;
-greeting(["welcome"])		-> true;
-greeting(["afternoon"])	-> true;
+greeting(["hey"])				-> true;
+greeting(["hola"])			-> true;
+greeting(["heyo"])			-> true;
+greeting(["hey-o"])			-> true;
+greeting(["hello"])			-> true;
 greeting(["evening"])		-> true;
+greeting(["welcome"])		-> true;
+greeting(["greeting"])	-> true;
+greeting(["afternoon"])	-> true;
+greeting(["greetings"])	-> true;
 greeting(_)							-> false.
 
 greet() ->
@@ -119,9 +127,7 @@ confused() ->
 		{say, "huh?" },
 		{say, "what?" },
 		{say, "hmm?" },
-		{say, "sorry?" },
-		{say, "i don't understand" },
-		{say, "english isn't my first language" }
+		{say, "sorry?" }
 	].
 
 areyouabot() ->
