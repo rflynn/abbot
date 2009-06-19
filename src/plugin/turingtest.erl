@@ -22,7 +22,12 @@ loop() ->
 	receive
 		% scan all lines for possible queries or definitions
 		{act, Pid, Irc, Msg, Dst, Nick, Txt} ->
-			behuman(Pid, Irc, Msg, Dst, Nick, Txt),
+			if
+				Nick /= (Irc#ircconn.user)#ircsrc.nick ->
+					% don't respond to myself. prevent possible infinite loop.
+					behuman(Pid, Irc, Msg, Dst, Nick, Txt);
+				true -> nil
+			end,
 			loop();
 		% help
 		{help, Pid, Dst, Nick} ->
