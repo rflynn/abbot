@@ -104,7 +104,11 @@ info(Url, Rawtxt) ->
 		[Url,Code]),
 	case Code of
 		notparsable -> nil;
-		error -> error(Url, Content);
+		error ->
+			if
+				enetunreach == Content -> nil; % get this sometimes, not sure why
+				true -> error(Url, Content)
+			end;
 		_ -> ok(Url, Code, Content, Rawtxt)
 	end.
 
@@ -143,7 +147,6 @@ do_urlscan(Rawtxt, Ignore) ->
 				end,
 		Urls),
 	Urls2.
-
 
 test() ->
 	test:unit(urlinfo,
