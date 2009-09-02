@@ -12,13 +12,30 @@ abbot() ->
   "learning erlang -- fun()".
 
 get_started() ->
-  "install erlang",
+  install_erlang(),
   "git clone git://github.com/pizza/abbot.git ~/abbot",
   "cd ~/abbot/src",
-  "modify bot.erl master, pass and chan -defines",
+  "modify bot.erl 'master', 'pass' and 'chan' -defines",
   "make",
   "./abbot.sh",
-  Bot0 = spawn(bot, go, ["irc.dal.net"]),
-  "...",
+  % in shell type:
+  Bot0 = spawn(bot, go, ["irc.dal.net"]).
+
+kill_bot() ->
   Bot0 ! quit.
+
+plugin_hot_reload() ->
+  % how to modify plugins and reload them on the fly...
+  % NOTE: works for plugins and any code EXCEPT bot.erl
+  "modify plugin foo",
+  % in shell...
+  cd(plugin),   % chdir
+  c(foo),       % compile
+  foo:test(),   % test, optional
+  l(foo).       % replace old with new
+
+plugins_reload() ->
+  % NOTE: plugins must be compiled and loaded first;
+  % for develop you probably want plugin_hot_reload() instead
+  Bot0 ! {reload, plugins}. % reload all plugins
 
