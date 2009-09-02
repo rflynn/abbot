@@ -2,6 +2,11 @@
 
 % attempt to pass informal Turing tests.
 
+% FIXME: this is currently too stupid to enable.
+% this can't follow the normal plugin model, we need it to
+% be a catch-all to respond to input that is not used by any
+% other plugin
+
 -module(turingtest).
 -author("pizza@parseerror.com").
 -export(
