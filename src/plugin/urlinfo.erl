@@ -7,13 +7,20 @@
 % regularly on random web pages.
 
 -module(urlinfo).
--export([test/0, loop/0, info/1, urlmatch/1, isParsable/1]).
+-export([test/0, loop/0, info/1, urlmatch/1, do_urlscan/2, isParsable/1]).
 
 -include_lib("../irc.hrl").
 -import(irc).
 -import(ircutil).
 -import(test).
 -define(timeout, 10000).
+
+% hard-coded list of url prefixes to ignore; reduces junk
+% output for urls mentioned commonly and/or by other bots
+-define(scan_ignore,
+	[
+		"woot.com" % mod_spox mentions this one often for some reason
+	]).
 
 loop() ->
 	receive
@@ -24,7 +31,7 @@ loop() ->
 			act(Pid, Msg, Rawtxt, Dst, Nick, Url),
 			loop();
 		{act, Pid, _Irc, #ircmsg{rawtxt=Rawtxt}, Dst, _Nick, _Txt} ->
-			scan_for_urls(Pid, Rawtxt, Dst),
+			urlscan(Pid, Rawtxt, Dst, ?scan_ignore),
 			loop();
 		{act, _, _, _, _, _, _} ->
 			loop();
@@ -103,7 +110,19 @@ info(Url, Rawtxt) ->
 
 % given a line of IRC input, scan it for URLs and
 % investigate each, producing a one-line report
-scan_for_urls(Pid, Rawtxt, Dst) ->
+urlscan(Pid, Rawtxt, Dst, Ignore) ->
+	[ spawn(
+		fun() ->
+			Output = info(Url, Rawtxt),
+			if
+				Output == nil -> nil;
+				true -> Pid ! {q, irc:privmsg(Dst, Output)}
+			end
+		end) || Url <- do_urlscan(Rawtxt, Ignore)
+	].
+
+% given a line of IRC input, scan it for URLs
+do_urlscan(Rawtxt, Ignore) ->
 	Urls = % detect output from other abbots
 		case re:run(Rawtxt,
 			"(" ++
@@ -116,20 +135,21 @@ scan_for_urls(Pid, Rawtxt, Dst) ->
 												% this avoids an endless feedback cycle
 			_ -> urlinfo:urlmatch(Rawtxt)
 			end,
-	[ spawn(
-		fun() ->
-			Output = info(Url, Rawtxt),
-			if
-				Output == nil -> nil;
-				true -> Pid ! {q, irc:privmsg(Dst, Output)}
-			end
-		end) || Url <- Urls
-	].
+	Urls2 = % filter ignored
+		lists:filter(
+			fun(Url) ->
+ 				lists:all(
+					fun(Ign) -> string:str(Url, Ign) == 0 end, Ignore)
+				end,
+		Urls),
+	Urls2.
+
 
 test() ->
 	test:unit(urlinfo,
 		[
-			{ urlmatch, test_urlmatch() }
+			{ urlmatch,   test_urlmatch()  },
+			{ do_urlscan, test_dourlscan() }
 		]).
 
 % see if the Content-Type header indicates an html or xml type document
@@ -242,7 +262,10 @@ urlmatch(Str, Off, Matches) ->
 	case re:run(Str,
 				"https?://" ++ % protocol
  				% domain
-				"(?:(?:[a-zA-Z0-9-]+)\\.)*(?:[a-zA-Z]+)" ++
+				"(?:"
+					"(?:(?:[a-zA-Z0-9-]+)\\.)*(?:[a-zA-Z]+)" ++
+					"|(?:[0-9]{1,3}\.){3}[0-9]{1,3}"
+				")"
 				% path
 				"(?:/[^/ >)}\\]]*)*" ++
 				% anchor
@@ -301,6 +324,22 @@ test_urlmatch() ->
 		{ [ "http://2.bp.blogspot.com/_Dc8q8nuzrHw/ShKXzIatZ4I/AAAAAAAAE3o/ZYuLaiTcbBU/s1600-h/AXEschedule.jpg" ], ["http://2.bp.blogspot.com/_Dc8q8nuzrHw/ShKXzIatZ4I/AAAAAAAAE3o/ZYuLaiTcbBU/s1600-h/AXEschedule.jpg"] },
 		{ [ "http://www.php.net/manual/en/function.settype.php" ], ["http://www.php.net/manual/en/function.settype.php"] },
 		{ [ "http://a-b-c.com/" ], ["http://a-b-c.com/"] },
-		{ [ "http://a.ws" ], ["http://a.ws"] }
+		{ [ "http://a.ws" ], ["http://a.ws"] },
+		{ [ "http://208.68.18.97" ], ["http://208.68.18.97"] },
+		{ [ "http://pastebin.ca/1" ], ["http://pastebin.ca/1"] }
+	].
+
+test_dourlscan() ->
+	[
+		{ [ "", [] ], [] },
+		{ [ " ", [] ], [] },
+		{ [ "http://foo", [] ], ["http://foo"] },
+		{ [ "http://a http://b", [] ], ["http://a", "http://b"] },
+		{ [ "http://pastebin.ca/1", [] ], ["http://pastebin.ca/1"] },
+		% test ignore list
+		{ [ "http://a.com", ["b.com"] ], ["http://a.com"] },
+		{ [ "http://a.com", ["a.com"] ], [] },
+		{ [ "http://a.com http://b.com", ["a.com"] ], ["http://b.com"] },
+		{ [ "http://a.com http://b.com", ["a.com","b.com"] ], [] }
 	].
 
