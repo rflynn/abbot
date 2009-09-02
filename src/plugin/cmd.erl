@@ -50,7 +50,7 @@ loop() ->
           [
 					  "[\"say\", Chan | What ] -> Say What in Chan",
 					  "[\"act\", Chan | What ] -> /me What in Chan",
-					  "[\"join\" | Chas      ] -> Join Chans",
+					  "[\"join\" | Chans     ] -> Join Chans",
 					  "[\"part\" | Chans     ] -> Leave Chans)",
 					  "[\"nick\", NewNick    ] -> Change nick",
 					  "[\"quit\" | Snarky    ] -> Quit"
