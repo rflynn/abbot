@@ -71,14 +71,16 @@ eval(Ruby) ->
 test_eval() ->
 	[
 		% see what our output is for various weird, sometimes-legitimate code snippets
+		% NOTE: we can't rely on ruby's exact output for error messages, it is inconsistent between 1.8 and 1.9
+		% and both are widely used
   	{ [ "" ],															"4" },
-  	{ [ "." ],														"-e:1: syntax error, unexpected '.', expecting '}'" },
-  	{ [ ":" ],														"-e:1: syntax error, unexpected ':', expecting '}'" },
-  	{ [ "<" ],														"-e:1: syntax error, unexpected '<', expecting '}'" },
+  	%{ [ "." ],														"-e:1: syntax error, unexpected '.', expecting '}'" },
+  	%{ [ ":" ],														"-e:1: syntax error, unexpected ':', expecting '}'" },
+  	%{ [ "<" ],														"-e:1: syntax error, unexpected '<', expecting '}'" },
   	{ [ "\b" ],														"Invalid char" },
-  	{ [ "$" ],														"-e:1: syntax error, unexpected $undefined, expecting '}'" },
-  	{ [ "}" ],														"-e:1: syntax error, unexpected '}', expecting $end" },
-  	{ [ "{" ],														"-e:1: syntax error, unexpected $end, expecting '}'" },
+  	%{ [ "$" ],														"-e:1: syntax error, unexpected $undefined, expecting '}'" },
+  	%{ [ "}" ],														"-e:1: syntax error, unexpected '}', expecting $end" },
+  	%{ [ "{" ],														"-e:1: syntax error, unexpected $end, expecting '}'" },
   	{ [ "{}" ],														"{}" },
   	{ [ "$$" ],														"Insecure operation at level 4" },
 		{ [ string:chars(32, 50) ],						"4" },
