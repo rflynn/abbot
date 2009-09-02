@@ -235,6 +235,7 @@ react(Irc, #ircmsg{type="PART"}, _)		-> Irc;
 react(Irc, #ircmsg{type="MODE"}, _)		-> Irc;
 react(Irc, #ircmsg{type="NICK"}, _)		-> Irc;
 react(Irc, #ircmsg{type="QUIT"}, _)		-> Irc;
+react(Irc, #ircmsg{type="372"}, _)		-> Irc;
 react(Irc, #ircmsg{type=Type}, _) ->
 	io:format("*** TYPE ~s unhandled~n", [Type]),
 	Irc.
