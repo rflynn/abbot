@@ -70,7 +70,6 @@ tinyurl(Url) ->
 ok(Pid, Msg, Dst, Nick, Cnt, Content) ->
 	Cnt2 = util:min(Cnt, ?stories_max),
 	Items = rss_items(Content),
-	io:format("Cnt2=~p Items=~p~n", [Cnt2, Items]),
 	% because tinyurl() could timeout, send the responses one
   % at a time for better interactivity
 	Pid ! {pipe, Msg,
@@ -93,7 +92,6 @@ rss_items(Rss) ->
 			proplists:get_value(String, Mapping, 0) end,
 	MyFuns = [{my_fun, F, [string]}],
 	Items = mochiweb_xpath:execute("//item", Doc, MyFuns),
-	Tags = [ Tags || {_Item, _Attr, Tags} <- Items ],
 	io:format("Tags=~p~n", [Tags]),
 	Meat = [ % filter out stuff i don't want
 		lists:filter(
