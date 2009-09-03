@@ -30,7 +30,9 @@ loop() ->
 		{act, Pid, _Irc, #ircmsg{rawtxt=Rawtxt}=Msg, Dst, Nick, ["url", Url ]} ->
 			act(Pid, Msg, Rawtxt, Dst, Nick, Url),
 			loop();
-		{act, Pid, _Irc, #ircmsg{rawtxt=Rawtxt}, Dst, _Nick, _Txt} ->
+		{act, Pid, Irc, #ircmsg{rawtxt=Rawtxt}, Dst, Nick, _Txt} ->
+			io:format("urlinfo Nick=~s mynick=~s~n", [Nick,(Irc#ircconn.user)#ircsrc.nick]),
+			% FIXME: ignore lines that i myself produce; necessary for pipes.
 			urlscan(Pid, Rawtxt, Dst, ?scan_ignore),
 			loop();
 		{act, _, _, _, _, _, _} ->
