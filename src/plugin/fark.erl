@@ -95,7 +95,6 @@ rss_items(Rss) ->
 	MyFuns = [{my_fun, F, [string]}],
 	Items = mochiweb_xpath:execute("//item", Doc, MyFuns),
 	Tags = [ Tags || {_Item, _Attr, Tags} <- Items ],
-	io:format("Tags=~p~n", [Tags]),
 	Meat = [ % filter out stuff i don't want
 		lists:filter(
 			fun(X) ->
