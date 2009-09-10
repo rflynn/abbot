@@ -1,5 +1,4 @@
 % ex: set ts=2 et:
-m  
 
 -module(translate).
 -author("pizza@parseerror.com").
