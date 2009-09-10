@@ -19,7 +19,8 @@
 % output for urls mentioned commonly and/or by other bots
 -define(scan_ignore,
 	[
-		"woot.com" % mod_spox mentions this one often for some reason
+		"woot.com", % mod_spox mentions this one often for some reason
+		"http://www.php.net/manual" % mod_spox's php function lookup
 	]).
 
 loop() ->

@@ -92,7 +92,7 @@ rss_items(Rss) ->
 			proplists:get_value(String, Mapping, 0) end,
 	MyFuns = [{my_fun, F, [string]}],
 	Items = mochiweb_xpath:execute("//item", Doc, MyFuns),
-	io:format("Tags=~p~n", [Tags]),
+	Tags = [ Tags || {_Item, _Attr, Tags} <- Items ],
 	Meat = [ % filter out stuff i don't want
 		lists:filter(
 			fun(X) ->
