@@ -98,13 +98,13 @@ content(From, To, Txt) ->
   Post =
     [
      { "ei",      "ISO-8859-1"      },
-     { "doit",     "done"            },
+     { "doit",    "done"            },
      { "fr",      "bf-res"          },
      { "intl",    "1"               },
      { "tt",      "urltext"         },
-     { "lp",      From ++ "_" ++ To  },  
+     { "lp",      From ++ "_" ++ To },  
      { "trtext",  Txt               },
-     { "inp_btn",  "Translate"        }],
+     { "inp_btn", "Translate"       }],
   io:format("Header Post=~p~n", [Post]),
   case http:request(post,
     {
@@ -233,7 +233,10 @@ en_eb(Str) ->
   Tok = string:tokens(Lc, " ?:,"),
   en_eb(Tok, []).
 en_eb([], Wr) -> util:j(Wr);
+% phrases
+en_eb(["a","nearby","residential","area" | Rd], Wr) -> en_eb(Rd, Wr ++ ["da hood"]);
 en_eb(["nearby","residential","area" | Rd], Wr) -> en_eb(Rd, Wr ++ ["da hood"]);
+en_eb(["residential","area"          | Rd], Wr) -> en_eb(Rd, Wr ++ ["hood"]);
 en_eb(["understand","this","fact"    | Rd], Wr) -> en_eb(Rd, Wr ++ ["get it now"]);
 en_eb(["where","are","you"           | Rd], Wr) -> en_eb(Rd, Wr ++ ["where you at"]);
 en_eb(["would","you","like"          | Rd], Wr) -> en_eb(Rd, Wr ++ ["yo lets"]);
@@ -245,18 +248,34 @@ en_eb(["watch","carefully"           | Rd], Wr) -> en_eb(Rd, Wr ++ ["peep this"]
 en_eb(["watch","this"                | Rd], Wr) -> en_eb(Rd, Wr ++ ["peep this"]);
 en_eb(["watch","me"                  | Rd], Wr) -> en_eb(Rd, Wr ++ ["peep this"]);
 en_eb(["oh","my","gosh"              | Rd], Wr) -> en_eb(Rd, Wr ++ ["oh damn!"]);
-en_eb(["oh","my","goddness"          | Rd], Wr) -> en_eb(Rd, Wr ++ ["oh damn!"]);
+en_eb(["oh","my","goodness"          | Rd], Wr) -> en_eb(Rd, Wr ++ ["oh damn!"]);
+en_eb(["in","this"                   | Rd], Wr) -> en_eb(Rd, Wr ++ ["all up in this"]);
 en_eb(["associated","with"           | Rd], Wr) -> en_eb(Rd, Wr ++ ["all up in"]);
-en_eb(["associated"   | Rd], Wr) -> en_eb(Rd, Wr ++ ["all up in"]);
+en_eb(["are","not"                   | Rd], Wr) -> en_eb(Rd, Wr ++ ["ain't"]);
+en_eb(["of","consequence"            | Rd], Wr) -> en_eb(Rd, Wr ++ ["shit"]);
+en_eb(["no","consequence"            | Rd], Wr) -> en_eb(Rd, Wr ++ ["shit"]);
+en_eb(["lots","of"    | Rd], Wr) -> en_eb(Rd, Wr ++ ["mad"]);
+en_eb(["listen","up"  | Rd], Wr) -> en_eb(Rd, Wr ++ ["check it"]);
+en_eb(["with","me"    | Rd], Wr) -> en_eb(Rd, Wr ++ ["and","shit"]);
+en_eb(["was","shot"   | Rd], Wr) -> en_eb(Rd, Wr ++ ["got wet"]);
+en_eb(["pardon","me"  | Rd], Wr) -> en_eb(Rd, Wr ++ ["step off"]);
 en_eb(["i","have"     | Rd], Wr) -> en_eb(Rd, Wr ++ ["i gots"]);
 en_eb(["i","will"     | Rd], Wr) -> en_eb(Rd, Wr ++ ["gunna"]);
 en_eb(["going","to"   | Rd], Wr) -> en_eb(Rd, Wr ++ ["gunna"]);
+en_eb(["do","you"     | Rd], Wr) -> en_eb(Rd, Wr ++ ["y'all niggaz"]);
+en_eb(["how","you"    | Rd], Wr) -> en_eb(Rd, Wr ++ ["how youze"]);
+% single words
+en_eb(["doing"        | Rd], Wr) -> en_eb(Rd, Wr ++ ["be"]);
+en_eb(["those"        | Rd], Wr) -> en_eb(Rd, Wr ++ ["dem"]);
+en_eb(["people"       | Rd], Wr) -> en_eb(Rd, Wr ++ ["niggaz"]);
+en_eb(["associated"   | Rd], Wr) -> en_eb(Rd, Wr ++ ["all up in"]);
 en_eb(["the"          | Rd], Wr) -> en_eb(Rd, Wr ++ ["da"]);
 en_eb(["or"           | Rd], Wr) -> en_eb(Rd, Wr ++ ["o"]);
 en_eb(["to"           | Rd], Wr) -> en_eb(Rd, Wr ++ ["all"]);
 en_eb(["sure"         | Rd], Wr) -> en_eb(Rd, Wr ++ ["sho"]);
 en_eb(["for"          | Rd], Wr) -> en_eb(Rd, Wr ++ ["fo"]);
 en_eb(["my"           | Rd], Wr) -> en_eb(Rd, Wr ++ ["ma"]);
+en_eb(["this"         | Rd], Wr) -> en_eb(Rd, Wr ++ ["dis"]);
 en_eb(["hello"        | Rd], Wr) -> en_eb(Rd, Wr ++ ["wassup"]);
 en_eb(["greetings"    | Rd], Wr) -> en_eb(Rd, Wr ++ ["wassup"]);
 en_eb(["deal"         | Rd], Wr) -> en_eb(Rd, Wr ++ ["dilly"]);
@@ -264,7 +283,7 @@ en_eb(["man"          | Rd], Wr) -> en_eb(Rd, Wr ++ ["muthafucka"]);
 en_eb(["friend"       | Rd], Wr) -> en_eb(Rd, Wr ++ ["nigga"]);
 en_eb(["friends"      | Rd], Wr) -> en_eb(Rd, Wr ++ ["peeps"]);
 en_eb(["associates"   | Rd], Wr) -> en_eb(Rd, Wr ++ ["peeps"]);
-en_eb(["gentleman"    | Rd], Wr) -> en_eb(Rd, Wr ++ ["g"]);
+en_eb(["gentleman"    | Rd], Wr) -> en_eb(Rd, Wr ++ ["nigga"]);
 en_eb(["gentlemen"    | Rd], Wr) -> en_eb(Rd, Wr ++ ["gs"]);
 en_eb(["gangster"     | Rd], Wr) -> en_eb(Rd, Wr ++ ["g"]);
 en_eb(["sir"          | Rd], Wr) -> en_eb(Rd, Wr ++ ["nigga"]);
@@ -280,31 +299,29 @@ en_eb(["accessories"  | Rd], Wr) -> en_eb(Rd, Wr ++ ["bling"]);
 en_eb(["jewelry"      | Rd], Wr) -> en_eb(Rd, Wr ++ ["bling"]);
 en_eb(["need"         | Rd], Wr) -> en_eb(Rd, Wr ++ ["gots ta git"]);
 en_eb(["want"         | Rd], Wr) -> en_eb(Rd, Wr ++ ["gots ta git"]);
-en_eb(["money"        | Rd], Wr) -> en_eb(Rd, Wr ++ ["Benjamins"]);
+en_eb(["money"        | Rd], Wr) -> en_eb(Rd, Wr ++ ["chedda"]);
 en_eb(["good"         | Rd], Wr) -> en_eb(Rd, Wr ++ ["bomb"]);
+en_eb(["best"         | Rd], Wr) -> en_eb(Rd, Wr ++ ["bomb"]);
 en_eb(["marijuana"    | Rd], Wr) -> en_eb(Rd, Wr ++ ["chronic"]);
 en_eb(["weed"         | Rd], Wr) -> en_eb(Rd, Wr ++ ["chronic"]);
 en_eb(["beer"         | Rd], Wr) -> en_eb(Rd, Wr ++ ["40z"]);
 en_eb(["here"         | Rd], Wr) -> en_eb(Rd, Wr ++ ["up in this piece"]);
 en_eb(["copious"      | Rd], Wr) -> en_eb(Rd, Wr ++ ["mad"]);
 en_eb(["many"         | Rd], Wr) -> en_eb(Rd, Wr ++ ["mad"]);
-en_eb(["lots","of"    | Rd], Wr) -> en_eb(Rd, Wr ++ ["mad"]);
 en_eb(["lots"         | Rd], Wr) -> en_eb(Rd, Wr ++ ["mad"]);
+en_eb(["a","lot","of" | Rd], Wr) -> en_eb(Rd, Wr ++ ["mad"]);
 en_eb(["alcohol"      | Rd], Wr) -> en_eb(Rd, Wr ++ ["cristal"]);
 en_eb(["boyfriend"    | Rd], Wr) -> en_eb(Rd, Wr ++ ["boo"]);
 en_eb(["girlfriend"   | Rd], Wr) -> en_eb(Rd, Wr ++ ["boo"]);
 en_eb(["husband"      | Rd], Wr) -> en_eb(Rd, Wr ++ ["man"]);
-en_eb(["listen","up"  | Rd], Wr) -> en_eb(Rd, Wr ++ ["check it"]);
 en_eb(["listen"       | Rd], Wr) -> en_eb(Rd, Wr ++ ["check it"]);
 en_eb(["promiscuous"  | Rd], Wr) -> en_eb(Rd, Wr ++ ["ho"]);
-en_eb(["have"         | Rd], Wr) -> en_eb(Rd, Wr);
 en_eb(["intercourse"  | Rd], Wr) -> en_eb(Rd, Wr ++ ["fuck"]);
 en_eb(["car"          | Rd], Wr) -> en_eb(Rd, Wr ++ ["benz"]);
 en_eb(["sex"          | Rd], Wr) -> en_eb(Rd, Wr ++ ["fuck"]);
 en_eb(["ex-girlfriend"| Rd], Wr) -> en_eb(Rd, Wr ++ ["baby mama"]);
 en_eb(["ex-boyfriend" | Rd], Wr) -> en_eb(Rd, Wr ++ ["baby fatha"]);
 en_eb(["ex"           | Rd], Wr) -> en_eb(Rd, Wr ++ ["baby mama"]);
-en_eb(["with","me"    | Rd], Wr) -> en_eb(Rd, Wr ++ ["and","shit"]);
 en_eb(["with"         | Rd], Wr) -> en_eb(Rd, Wr ++ ["wit"]);
 en_eb(["stuff"        | Rd], Wr) -> en_eb(Rd, Wr ++ ["shit"]);
 en_eb(["gun"          | Rd], Wr) -> en_eb(Rd, Wr ++ ["gat"]);
@@ -312,7 +329,6 @@ en_eb(["shoot"        | Rd], Wr) -> en_eb(Rd, Wr ++ ["pop a cap"]);
 en_eb(["shot"         | Rd], Wr) -> en_eb(Rd, Wr ++ ["got wet"]);
 en_eb(["relax"        | Rd], Wr) -> en_eb(Rd, Wr ++ ["step off"]);
 en_eb(["retreat"      | Rd], Wr) -> en_eb(Rd, Wr ++ ["step off"]);
-en_eb(["pardon me"    | Rd], Wr) -> en_eb(Rd, Wr ++ ["step off"]);
 en_eb(["diamonds"     | Rd], Wr) -> en_eb(Rd, Wr ++ ["ice"]);
 en_eb(["teeth"        | Rd], Wr) -> en_eb(Rd, Wr ++ ["grill"]);
 en_eb(["mouth"        | Rd], Wr) -> en_eb(Rd, Wr ++ ["grill"]);
@@ -326,10 +342,20 @@ en_eb(["locally"      | Rd], Wr) -> en_eb(Rd, Wr ++ ["in da hood"]);
 en_eb(["untrustworthy"| Rd], Wr) -> en_eb(Rd, Wr ++ ["skeeza"]);
 en_eb(["certainly"    | Rd], Wr) -> en_eb(Rd, Wr ++ ["fo shizzy"]);
 en_eb(["stupid"       | Rd], Wr) -> en_eb(Rd, Wr ++ ["whack"]);
+en_eb(["mysterious"   | Rd], Wr) -> en_eb(Rd, Wr ++ ["whack"]);
+en_eb(["mystery"      | Rd], Wr) -> en_eb(Rd, Wr ++ ["whack"]);
+en_eb(["unknown"      | Rd], Wr) -> en_eb(Rd, Wr ++ ["whack"]);
 en_eb(["slut"         | Rd], Wr) -> en_eb(Rd, Wr ++ ["chickenhead"]);
+en_eb(["slutty"       | Rd], Wr) -> en_eb(Rd, Wr ++ ["chickenhead"]);
 en_eb(["attractive"   | Rd], Wr) -> en_eb(Rd, Wr ++ ["hot"]);
-en_eb([R|Rd], []) -> en_eb(Rd, [R]);
-en_eb([R|Rd], Wr) -> en_eb(Rd, Wr ++ [R]).
+en_eb(["strange"      | Rd], Wr) -> en_eb(Rd, Wr ++ ["whack"]);
+en_eb(["strangely"    | Rd], Wr) -> en_eb(Rd, Wr ++ ["whack"]);
+en_eb(["upset"        | Rd], Wr) -> en_eb(Rd, Wr ++ ["trippin"]);
+% ignore words
+en_eb(["have"         | Rd], Wr) -> en_eb(Rd, Wr);
+en_eb(["is"           | Rd], Wr) -> en_eb(Rd, Wr);
+en_eb([R|Rd],                []) -> en_eb(Rd, [R]);
+en_eb([R|Rd],                Wr) -> en_eb(Rd, Wr ++ [R]).
 
 load_internet_slang(Path) ->
   parse_internet_slang(util:readlines(util:relpath(
