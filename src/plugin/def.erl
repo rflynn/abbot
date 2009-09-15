@@ -34,6 +34,8 @@
 -import(irc).
 -import(ircutil).
 
+-define(max_terms, 8).
+
 test() ->
 	% TODO: actual, you know, tests.
 	true.
@@ -140,7 +142,7 @@ answer(_Pid, _Irc, _Msg, _Dst, _Nick, {[],_,_}) -> nil;
 answer(_Pid, _Irc, _Msg, _Dst, _Nick, {_,_,[]}) -> nil;
 answer(Pid, Irc, _Msg, _Dst, Nick, {Term,_,Def}) ->
 	if
-		length(Term) =< 3 ->
+		length(Term) =< ?max_terms ->
 			io:format("answer(Term=~p, Def=~p)~n", [Term, Def]),
 			dict_set(Pid, Irc, Nick, Term, Def);
 		true ->
@@ -167,7 +169,8 @@ dict_set_(Pid, Irc, Term, Rest) ->
 	Val = ircutil:dotdotdot(util:j(Rest), 100),
 	io:format("dict_set Term2=~p Val=~p~n", [Term2, Val]),
 	Is2 = dict:store(string:to_lower(Term2), Val, Is),
-	Pid ! {setstate, is, Is2}.
+	Pid ! {setstate, is, Is2},
+	Pid ! save.										% save dict to disk
 
 % retrieve Key -> Val mapping in dictionary
 % NOTE: translate between "you" <-> "i", i.e. "what are you?" -> "i am ..."
@@ -194,6 +197,7 @@ dict_forget(Pid, Irc, Dst, Nick, Term) ->
 	io:format("dict_forget Term=~p Term2=~p~n", [Term, Term2]),
 	Is2 = dict:erase(string:to_lower(Term2), Is),
 	Pid ! {setstate, is, Is2},
+	Pid ! save,										% save dict to disk
 	Pid ! {q, irc:resp(Dst, Nick, Nick ++ ": forgotten.") }.
 
 % list all the topics i know about
