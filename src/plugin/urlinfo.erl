@@ -19,8 +19,9 @@
 % output for urls mentioned commonly and/or by other bots
 -define(scan_ignore,
 	[
+		"dev.modspox.com", % mod_spox's home
 		"woot.com", % mod_spox mentions this one often for some reason
-		"http://www.php.net/manual" % mod_spox's php function lookup
+		"php.net/manual" % mod_spox's php function lookup
 	]).
 
 loop() ->
@@ -91,7 +92,7 @@ txt_(Content) ->
 
 % 
 act(Pid, Msg, Rawtxt, Dst, Nick, Url) ->
-	Output = info(Url, Rawtxt),
+	Output = info(Url, Rawtxt, false),
 	if
 		Output /= nil ->
 			Pid ! { pipe, Msg, irc:resp(Dst, Nick, Output) };
@@ -99,9 +100,9 @@ act(Pid, Msg, Rawtxt, Dst, Nick, Url) ->
 	end.
 
 info(Url) ->
-	info(Url, "").
+	info(Url, "", false).
 
-info(Url, Rawtxt) ->
+info(Url, Rawtxt, Scanned) ->
 	{Code, Content} = content(Url),
 	io:format("info Url=~s Code=~p Content=...~n",
 		[Url,Code]),
@@ -112,7 +113,7 @@ info(Url, Rawtxt) ->
 				enetunreach == Content -> nil; % get this sometimes, not sure why
 				true -> error(Url, Content)
 			end;
-		_ -> ok(Url, Code, Content, Rawtxt)
+		_ -> ok(Url, Code, Content, Rawtxt, Scanned)
 	end.
 
 % given a line of IRC input, scan it for URLs and
@@ -120,7 +121,7 @@ info(Url, Rawtxt) ->
 urlscan(Pid, Rawtxt, Dst, Ignore) ->
 	[ spawn(
 		fun() ->
-			Output = info(Url, Rawtxt),
+			Output = info(Url, Rawtxt, true),
 			if
 				Output == nil -> nil;
 				true -> Pid ! {q, irc:privmsg(Dst, Output)}
@@ -237,15 +238,20 @@ error(Url, Code) ->
 		io_lib:format("url ~s -> ~s", [Url, Code])).
 
 % url fetch succeeded, display url, title and tinyurl
-ok(Url, _Code, Content, Rawtxt) ->
+ok(Url, _Code, Content, Rawtxt, Scanned) ->
 	Title = title(Content),
 	io:format("urlinfo ok Title=~p Rawtxt=~p~n",
 		[Title, Rawtxt]),
-	case (Title == "") or (string:str(Rawtxt, Title) /= 0) of
+	% only filter based on quality if this was a passively-scannd URL; if we were specifically asked to
+	% look it up, always response.
+	% TODO: this is not the right place for this, refactor
+	case Scanned and ((Title == "") or (string:str(Rawtxt, Title) /= 0) or (url_title_fuzzymatch(Url, Title))) of
 		true ->
 			% the string we parsed the url from already contains
 			% the entire URL's title; that means it is probably from
 			% another bot's search result. don't send anything.
+		  % ...or the title is (mostly) contained in the URL already,
+		  % don't bother reprinting it.
 			nil;
 		false ->
 			TinyURL = 
@@ -253,11 +259,23 @@ ok(Url, _Code, Content, Rawtxt) ->
 					length(Url) < 30 -> ""; % short already
 					true -> tinyurl(Url)
 				end,
-			Title2 = ircutil:dotdotdot(cgi:entity_decode(Title), 70),
+			Title2 = ircutil:dotdotdot(cgi:entity_decode(Title), 100),
 			lists:flatten(
 				io_lib:format("url \"~s\" ~s",
 					[Title2, TinyURL]))
 	end.
+
+% many sites now have descriptive URLs (but some don't)
+% blindly reprinting a title that is obvious from the URL is annoying.
+% <@metallic> http://tech.slashdot.org/story/10/06/08/2158202/2-In-3-Misunderstand-Gas-Mileage-Heres-Why?art_pos=2
+% 20:05 < abbot> url "Slashdot Technology Story | 2 In 3 Misunderstand Gas Mileage; Here's Why" http://tinyurl.com/276wyqq
+% let's try and decide if the URL contains most of the title words
+% tokenize url and page title and figure out how similar they are
+url_title_fuzzymatch(Url, Title) ->
+	UrlTok = ordsets:from_list(string:tokens(string:to_lower(Url), " :/.-?&|")),
+	TitleTok = ordsets:from_list(string:tokens(string:to_lower(Title), " :/.-?&|")),
+	Intersect = ordsets:intersection(UrlTok, TitleTok),
+	ordsets:size(Intersect) / ordsets:size(TitleTok) >= 0.8. % TODO: test magic "close" percentage
 
 % given an arbitrary string, produce a list of all
 % http urls contained within
