@@ -19,8 +19,8 @@ test() ->
 
 loop() ->
 	receive
-		{ act, Pid, Irc, Msg, Dst, Nick, ["echo" | _]} ->
-			echo(Pid, Irc, Msg, Dst, Nick, ""),
+		{ act, Pid, Irc, Msg, Dst, Nick, ["echo" | Txt]} ->
+			echo(Pid, Irc, Msg, Dst, Nick, Txt),
 			loop();
 		{ act, Pid, Irc, Msg, Dst, Nick, ["head" | Txt]} ->
 			head(Pid, Irc, Msg, Dst, Nick, Txt),
@@ -49,7 +49,7 @@ loop() ->
 			Pid ! { q,
 				[ irc:resp(Dst, Nick, Nick ++ ": " ++ Txt) || Txt <-
 					[
-						"[\"echo\"   | Txt] -> print stuff, useful for piping",
+						"[\"echo\",  | Txt] -> print Txt",
 						"[\"head\",  | Txt] -> first item",
 						"[\"last\",  | Txt] -> last item",
 						"[\"md5\",   | Txt] -> md5 checksum Txt",
@@ -62,10 +62,10 @@ loop() ->
 			loop()
 	end.
 
-echo(Pid, _, Msg, Dst, Nick, _) ->
-	Res = string:substr(Msg#ircmsg.rawtxt, length("echo")+1),
-	Res2 = util:trim(Res),
-	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Res2)}.
+echo(_, _, _, _, _, []) -> nil;
+echo(Pid, _, Msg, Dst, Nick, Txt) ->
+	Res = util:j(Txt),
+	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Res)}.
 
 head(_, _, _, _, _, []) -> nil;
 head(Pid, _, Msg, Dst, Nick, Txt) ->
