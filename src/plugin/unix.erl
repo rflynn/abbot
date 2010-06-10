@@ -19,8 +19,14 @@ test() ->
 
 loop() ->
 	receive
+		{ act, Pid, Irc, Msg, Dst, Nick, ["dig" , Domain]} ->
+			dig(Pid, Irc, Msg, Dst, Nick, Domain),
+			loop();
 		{ act, Pid, Irc, Msg, Dst, Nick, ["echo" | Txt]} ->
 			echo(Pid, Irc, Msg, Dst, Nick, Txt),
+			loop();
+		{ act, Pid, Irc, Msg, Dst, Nick, ["grep", Regexp | Txt]} ->
+			grep(Pid, Irc, Msg, Dst, Nick, Regexp, Txt),
 			loop();
 		{ act, Pid, Irc, Msg, Dst, Nick, ["head" | Txt]} ->
 			head(Pid, Irc, Msg, Dst, Nick, Txt),
@@ -50,6 +56,7 @@ loop() ->
 				[ irc:resp(Dst, Nick, Nick ++ ": " ++ Txt) || Txt <-
 					[
 						"[\"echo\",  | Txt] -> print Txt",
+						"[\"grep\", Regexp | Txt] -> filter text via regexp",
 						"[\"head\",  | Txt] -> first item",
 						"[\"last\",  | Txt] -> last item",
 						"[\"md5\",   | Txt] -> md5 checksum Txt",
@@ -62,10 +69,31 @@ loop() ->
 			loop()
 	end.
 
+dig(_, _, _, _, _, []) -> nil;
+dig(Pid, _, Msg, Dst, Nick, Domain) ->
+	{ok, Re} = re:compile("^([a-zA-Z0-9-]+\.)+[a-zA-Z]+$"),
+	case re:run(Domain, Re) of
+		nomatch -> nil;
+		{match, _} ->
+			Run = "dig " ++ Domain ++ " | grep \"^[^;]\" | head -n 1 | sed -e's/\\t/ /g'",
+  		Out = os:cmd(Run),
+			Lines = string:tokens(Out, "\r\n"),
+			Res = hd(Lines),
+			Pid ! {pipe, Msg, irc:resp(Dst, Nick, Res)}
+		end.
+
 echo(_, _, _, _, _, []) -> nil;
 echo(Pid, _, Msg, Dst, Nick, Txt) ->
 	Res = util:j(Txt),
 	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Res)}.
+
+grep(_, _, _, _, _, _, []) -> nil;
+grep(Pid, _, Msg, Dst, Nick, Regexp, Txt) ->
+	Txt2 = util:j(Txt),
+	case regexp:match(Txt2, Regexp) of
+		{match,_,_} -> Pid ! {pipe, Msg, irc:resp(Dst, Nick, Txt2)};
+		true        -> nil
+	end.
 
 head(_, _, _, _, _, []) -> nil;
 head(Pid, _, Msg, Dst, Nick, Txt) ->
