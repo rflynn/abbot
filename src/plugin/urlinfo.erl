@@ -34,8 +34,12 @@ loop() ->
 			loop();
 		{act, Pid, Irc, #ircmsg{rawtxt=Rawtxt}, Dst, Nick, _Txt} ->
 			io:format("urlinfo Nick=~s mynick=~s~n", [Nick,(Irc#ircconn.user)#ircsrc.nick]),
-			% FIXME: ignore lines that i myself produce; necessary for pipes.
-			urlscan(Pid, Rawtxt, Dst, ?scan_ignore),
+			% FIXME: need a way to detect pipelined messages!
+			% FIXME: pipelined message Nick is the original nick who sent it, not me.
+			if
+				Nick == (Irc#ircconn.user)#ircsrc.nick -> nil; % ignore self
+				true -> urlscan(Pid, Rawtxt, Dst, ?scan_ignore)
+			end,
 			loop();
 		{act, _, _, _, _, _, _} ->
 			loop();
@@ -272,10 +276,10 @@ ok(Url, _Code, Content, Rawtxt, Scanned) ->
 % let's try and decide if the URL contains most of the title words
 % tokenize url and page title and figure out how similar they are
 url_title_fuzzymatch(Url, Title) ->
-	UrlTok = ordsets:from_list(string:tokens(string:to_lower(Url), " :/.-?&|")),
-	TitleTok = ordsets:from_list(string:tokens(string:to_lower(Title), " :/.-?&|")),
+	UrlTok = ordsets:from_list(string:tokens(string:to_lower(Url), " :/.-?&|_")),
+	TitleTok = ordsets:from_list(string:tokens(string:to_lower(Title), " :/.-?&|_")),
 	Intersect = ordsets:intersection(UrlTok, TitleTok),
-	ordsets:size(Intersect) / ordsets:size(TitleTok) >= 0.8. % TODO: test magic "close" percentage
+	ordsets:size(Intersect) / ordsets:size(TitleTok) >= 2/3. % TODO: test magic "close" percentage
 
 % given an arbitrary string, produce a list of all
 % http urls contained within
