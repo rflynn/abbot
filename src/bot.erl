@@ -85,8 +85,8 @@ loop(Irc, Plugins) ->
 	receive
 		conn ->
 			% attempt to connect if we're not already
-			Irc2 = Irc,
-			%Irc2 = bot:reconn(Irc), % FIXME: does this work or not?
+			%Irc2 = Irc,
+			Irc2 = bot:reconn(Irc), % FIXME: does this work or not?
 			loop(Irc2, Plugins);
 		deq ->
 			Irc2 = bot:deq(Irc, Irc#ircconn.q),
@@ -102,10 +102,12 @@ loop(Irc, Plugins) ->
 			Irc2 = pipe_run(Irc, Plugins, Req, Resp),
 			loop(Irc2, Plugins);
 		{setstate, Key, Val} ->
-			io:format("Exiting...~n"),
 			% plugin req to update Irc state dict
-			io:format("loop {setstate, Key=~p, Val=~p}~n",
-				[Key, Val]),
+			if
+				% seen's dictionary is too large...
+				Key == seen -> io:format("loop {setstate, Key=~p, Val=...}~n", [Key]);
+				true -> io:format("loop {setstate, Key=~p, Val=~p}~n", [Key, Val])
+				end,
 			Irc2 = irc:setstate(Irc, Key, Val),
 			loop(Irc2, Plugins);
 		{irc, Irc2} ->
@@ -190,7 +192,7 @@ pipe_run(Irc, Plugins, Req, [Resp|Rest]) ->
 
 % check that Irc.connected is true, if not, reconnect
 reconn(Irc) ->
-	io:format("reconn connected=~p~n", [Irc#ircconn.connected]),
+	%io:format("reconn connected=~p~n", [Irc#ircconn.connected]),
 	if
 		not Irc#ircconn.connected -> doreconn(Irc);
 		true -> Irc
@@ -302,8 +304,7 @@ help(Irc, Plugins, Dst, Nick, ["help" | _]) ->
 		[ irc:resp(Dst, Nick, Nick ++ ": " ++ Out)
 			|| Out <-
 			[
-				"[\"help\" | Topic] -> get help for a particular topic",
-				"Topic = [" ++ util:join(",", PluginNames) ++ "]"
+				"[\"help\" | Topic] where Topic == any([" ++ util:join(",", PluginNames) ++ "])"
 			]
 		]).
 
