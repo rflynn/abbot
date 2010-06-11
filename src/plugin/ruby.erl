@@ -32,7 +32,7 @@ test() ->
 % receive loop
 loop() ->
 	receive
-		{act, Pid, _Irc, Msg, Dst, Nick, ["!ruby" | _]} ->
+		{act, Pid, _Irc, Msg, Dst, Nick, ["ruby" | _]} ->
 			act(Pid, Msg, Dst, Nick, Msg),
 			loop();
 		{act, _, _, _, _, _, _ } ->
@@ -42,7 +42,7 @@ loop() ->
 				[ irc:resp(Dst, Nick, Nick ++ ": " ++ Msg)
 					|| Msg <-
 					[
-						"[\"!ruby\" | Code] -> evaluate ruby source code at $SAFE level 4",
+						"[\"ruby\" | Code] -> evaluate ruby source code at $SAFE level 4",
 						"Code = [ \"hello\", 1+1, [1,2,3].map{|x|x*x} ] % examples"
 					]
 				]
@@ -59,13 +59,13 @@ act(Pid, Msg, Dst, Nick, Msg) ->
 	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Output)}.
 
 eval(Ruby) ->
-  Run = "./exec /usr/bin/ruby \"-e puts Thread.start{ \\$SAFE=4; " ++ escape(Ruby) ++ " }.join.value.inspect\"",
+  Run = "./exec /usr/bin/env ruby \"-e puts Thread.start{ \\$SAFE=4; " ++ escape(Ruby) ++ " }.join.value.inspect\"",
   %io:format("Ruby=<~s> Run=~p~n", [Ruby, Run]), % print all commands, so we can see 
   Out = os:cmd(Run),
 	Lines = string:tokens(Out, "\r\n"),
 	if
 		[] == Lines -> "";
-		true -> hd(Lines)
+		true -> ircutil:dotdotdot(hd(Lines), 200)
 	end.
 
 test_eval() ->
