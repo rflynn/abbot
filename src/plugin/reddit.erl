@@ -8,7 +8,7 @@
 -export([
 		test/0,
 		loop/0,
-		rss/5
+		rss/6
 	]).
 
 -include_lib("../irc.hrl").
@@ -16,40 +16,61 @@
 -import(ircutil).
 -import(test).
 
--define(rss_url,				 "http://reddit.com/r/programming.rss").
--define(timeout,				 5000).
--define(stories_max,     5).
--define(stories_default, 1).
+-define(timeout,               5000).
+-define(stories_max,              5).
+-define(stories_default,          1).
+-define(title_len,               60).
+-define(subreddit_default, "reddit").
+
+rss_url(Subreddit) ->
+	"http://reddit.com/r/" ++ Subreddit ++ ".rss".
 
 test() ->
 	true.
 
 loop() ->
 	receive
-		{act, Pid, _, Msg, Dst, Nick, ["reddit", Cnt]} ->
-			rss(Pid, Msg, Dst, Nick, list_to_integer(Cnt)),
-			loop();
 		{act, Pid, _, Msg, Dst, Nick, ["reddit"]} ->
-			rss(Pid, Msg, Dst, Nick, ?stories_default),
+			rss(Pid, Msg, Dst, Nick, ?subreddit_default, ?stories_default),
+			loop();
+		{act, Pid, _, Msg, Dst, Nick, ["reddit", SubredditOrCnt]} ->
+			{Cnt, Subreddit} =
+				% FIXME: list_to_integer() crashes process if fed non-int. couldn't make try/catch work
+				case SubredditOrCnt of
+					"1" -> {1, SubredditOrCnt};
+					"2" -> {2, SubredditOrCnt};
+					"3" -> {3, SubredditOrCnt};
+					"4" -> {4, SubredditOrCnt};
+					"5" -> {5, SubredditOrCnt};
+					_   -> {?stories_default, SubredditOrCnt}
+				end,
+			rss(Pid, Msg, Dst, Nick, Subreddit, Cnt),
+			loop();
+		{act, Pid, _, Msg, Dst, Nick, ["reddit", Subreddit, Cnt]} ->
+			rss(Pid, Msg, Dst, Nick, Subreddit, list_to_integer(Cnt)),
 			loop();
 		{act, _, _, _, _, _, _} ->
 			loop();
 		{help, Pid, Dst, Nick} ->
 			Pid ! {q,
-				irc:resp(Dst, Nick, Nick ++ ": " ++
-					"[\"reddit\" | Cnt] -> latest reddit programming stories (Cnt <= 5, default 1).")
+				[ irc:resp(Dst, Nick, Nick ++ ": " ++ Txt) || Txt <-
+					[
+						"[\"reddit\" | Cnt ] where Cnt <= " ++ integer_to_list(?stories_max) ++ " -> latest from /r/" ++ ?subreddit_default ++ ".",
+						"[\"reddit\", Subreddit | Cnt ] -> Cnt latest from /r/Subreddit."
+					]
+				]
 			},
 			loop()
 	end.
 
-rss(Pid, Msg, Dst, Nick, Cnt) ->
-	{Code, Content} = content(?rss_url),
+rss(Pid, Msg, Dst, Nick, Subreddit, Cnt) ->
+	{Code, Content} = content(rss_url(Subreddit)),
 	io:format("rss Code=~p Content=...~n", [Code]),
 	case Code of
 		error ->
 			Pid ! {q, irc:resp(Dst, Nick,
 				lists:flatten(io_lib:format("reddit -> ~s", [Code])))};
-		_ -> ok(Pid, Msg, Dst, Nick, Cnt, Content)
+		_ -> ok(Pid, Msg, Dst, Nick, Cnt, Subreddit, Content)
 	end.
 
 content(Url) ->
@@ -67,7 +88,7 @@ tinyurl(Url) ->
 	end.
 
 % url fetch succeeded, display items
-ok(Pid, Msg, Dst, Nick, Cnt, Content) ->
+ok(Pid, Msg, Dst, Nick, Cnt, Subreddit, Content) ->
 	Cnt2 = util:min(Cnt, ?stories_max),
 	Items = rss_items(Content),
 	% because tinyurl() could timeout, send the responses one
@@ -76,8 +97,8 @@ ok(Pid, Msg, Dst, Nick, Cnt, Content) ->
 		[
 			irc:resp(Dst, Nick,
 				lists:flatten(
-					io_lib:format("reddit ~-55s ~s",
-						[ ircutil:dotdotdot(cgi:entity_decode(Title), 55), tinyurl(Url)])))
+					io_lib:format("/r/~s ~-" ++ integer_to_list(?title_len) ++ "s ~s",
+						[ Subreddit, ircutil:dotdotdot(cgi:entity_decode(Title), ?title_len), tinyurl(Url)])))
 			|| [Title,Url] <- string:substr(Items, 1, Cnt2)
 		] }.
 
