@@ -6,14 +6,23 @@
 % NOTE: the mochiweb package i'm using crashes
 % regularly on random web pages.
 
+
 -module(urlinfo).
--export([test/0, loop/0, info/1, urlmatch/1, do_urlscan/2, isParsable/1]).
+-export([test/0, loop/0, info/1, urlmatch/1, do_urlscan/5, isParsable/1, substr_count/2, url_title_fuzzymatch/2]).
+-author("parseerror@gmail.com").
 
 -include_lib("../irc.hrl").
 -import(irc).
 -import(ircutil).
 -import(test).
--define(timeout, 10000).
+-define(timeout, 30000).
+-define(min_url_len_tinyurl, 50). % URLs shorter than this are not translated
+
+% FIXME: hard-coded nicks that generate copious URLs
+-define(nick_ignore,
+	[
+		"mod_spox"
+	]).
 
 % hard-coded list of url prefixes to ignore; reduces junk
 % output for urls mentioned commonly and/or by other bots
@@ -36,9 +45,9 @@ loop() ->
 			io:format("urlinfo Nick=~s mynick=~s~n", [Nick,(Irc#ircconn.user)#ircsrc.nick]),
 			% FIXME: need a way to detect pipelined messages!
 			% FIXME: pipelined message Nick is the original nick who sent it, not me.
-			if
-				Nick == (Irc#ircconn.user)#ircsrc.nick -> nil; % ignore self
-				true -> urlscan(Pid, Rawtxt, Dst, ?scan_ignore)
+			case lists:member(Nick, ?nick_ignore) or (Nick == (Irc#ircconn.user)#ircsrc.nick) of
+				true -> nil; % ignore
+				_ -> urlscan(Irc, Pid, Rawtxt, Dst, ?scan_ignore)
 			end,
 			loop();
 		{act, _, _, _, _, _, _} ->
@@ -69,7 +78,12 @@ txt(Url) ->
 	end.
 
 txt_(Content) ->
-	Doc = mochiweb_html:parse(Content),
+% {{badmatch,[]},[{mochiweb_html,parse_tokens,1},{urlinfo,txt_,1},{urlinfo,urltxt,6},{urlinfo,loop,0}]}
+	Doc = 
+		case mochiweb_html:parse(Content) of
+			{badmatch,[]} -> "";
+			Match -> Match
+		end,
 	Mapping = [{<<"link">>,1},{<<"myUrl">>,2}],
 	F =
 		fun(_Ctx, [String]) ->
@@ -93,6 +107,7 @@ txt_(Content) ->
 	Txt2 = util:j(ircutil:stripjunk(NoScript)),
 	Txt3 = util:j(string:tokens(Txt2, "\r\n\t")),
 	Txt3.
+
 
 % 
 act(Pid, Msg, Rawtxt, Dst, Nick, Url) ->
@@ -122,7 +137,7 @@ info(Url, Rawtxt, Scanned) ->
 
 % given a line of IRC input, scan it for URLs and
 % investigate each, producing a one-line report
-urlscan(Pid, Rawtxt, Dst, Ignore) ->
+urlscan(Irc, Pid, Rawtxt, Dst, Ignore) ->
 	[ spawn(
 		fun() ->
 			Output = info(Url, Rawtxt, true),
@@ -130,11 +145,11 @@ urlscan(Pid, Rawtxt, Dst, Ignore) ->
 				Output == nil -> nil;
 				true -> Pid ! {q, irc:privmsg(Dst, Output)}
 			end
-		end) || Url <- do_urlscan(Rawtxt, Ignore)
+		end) || Url <- do_urlscan(Irc, Pid, Dst, Rawtxt, Ignore)
 	].
 
 % given a line of IRC input, scan it for URLs
-do_urlscan(Rawtxt, Ignore) ->
+do_urlscan(Irc, Pid, Dst, Rawtxt, Ignore) ->
 	Urls = % detect output from other abbots
 		case re:run(Rawtxt,
 			"(" ++
@@ -154,13 +169,24 @@ do_urlscan(Rawtxt, Ignore) ->
 					fun(Ign) -> string:str(Url, Ign) == 0 end, Ignore)
 				end,
 		Urls),
-	Urls2.
+	% check that the URL is not the most recent sent to this Dst
+	LastURL = irc:state(Irc, {urlinfo,Dst}, ""),
+	Urls3 = lists:filter(fun(U) -> U /= LastURL end, Urls2),
+	if
+		length(Urls3) > 0 ->
+			NewLastURL = lists:last(Urls3),
+			Pid ! {setstate, {urlinfo,Dst}, NewLastURL};
+		true -> nil
+	end,
+	Urls3.
 
 test() ->
 	test:unit(urlinfo,
 		[
-			{ urlmatch,   test_urlmatch()  },
-			{ do_urlscan, test_dourlscan() }
+			{ urlmatch,             test_urlmatch()             },
+			%{ do_urlscan,           test_dourlscan()            },
+			{ substr_count,         test_substr_count()         },
+			{ url_title_fuzzymatch, test_url_title_fuzzymatch() }
 		]).
 
 % see if the Content-Type header indicates an html or xml type document
@@ -201,6 +227,8 @@ title(Content) ->
 	normalize_title(T2).
 
 % given html content, parse out the title
+% FIXME: mochiweb html parser crashes frequently; i spawn() URLs separately so the bot doesn't crash,
+% but crashing does kill any URL feedback. launch the parser in yet another separate process so that we can still report something
 title_([_|_]=Content) ->
 	Doc = mochiweb_html:parse(Content),
 	Mapping = [{<<"link">>,1},{<<"myUrl">>,2}],
@@ -258,28 +286,64 @@ ok(Url, _Code, Content, Rawtxt, Scanned) ->
 		  % don't bother reprinting it.
 			nil;
 		false ->
-			TinyURL = 
-				if 
-					length(Url) < 30 -> ""; % short already
-					true -> tinyurl(Url)
-				end,
-			Title2 = ircutil:dotdotdot(cgi:entity_decode(Title), 100),
+			Title2 = ircutil:dotdotdot(cgi:entity_decode(Title), 150),
 			lists:flatten(
-				io_lib:format("url \"~s\" ~s",
-					[Title2, TinyURL]))
+				io_lib:format("url \"~s\"", [Title2]))
 	end.
 
+% does Str exist as a substring in at least one entry of a list of strings?
+is_substr_list(Substr, List) ->
+	lists:any(fun(B) -> B end,
+		lists:map(fun(S)->string:str(S, Substr) /= 0 end, List)).
+
+% count true values in list
+count(List) -> count(List, 0).
+count([],       Cnt) -> Cnt;
+count([true|T], Cnt) -> count(T, Cnt+1);
+count([_|T],    Cnt) -> count(T, Cnt).
+
+substr_count(SubstrList, StrList) ->
+	count(lists:map(fun(Substr) -> is_substr_list(Substr, StrList) end, SubstrList)).
+
+test_substr_count() ->
+	[
+		{ [ [   ],     [       ] ], 0 },
+		{ [ ["" ],     [""     ] ], 0 },
+		{ [ ["a"],     [       ] ], 0 },
+		{ [ [   ],     ["a"    ] ], 0 },
+		{ [ ["a"],     ["b"    ] ], 0 },
+		{ [ ["b"],     ["a"    ] ], 0 },
+		{ [ ["a"],     ["a"    ] ], 1 },
+		{ [ ["a","b"], ["a"    ] ], 1 },
+		{ [ ["a"],     ["a","a"] ], 1 },
+		{ [ ["a"],     ["aa"   ] ], 1 },
+		{ [ ["b"],     ["ba"   ] ], 1 },
+		{ [ ["b"],     ["ab"   ] ], 1 },
+		{ [ ["b"],     ["bb"   ] ], 1 },
+		{ [ ["a","b"], ["a","b"] ], 2 },
+		{ [ ["a","b"], ["b","a"] ], 2 }
+	].
+
 % many sites now have descriptive URLs (but some don't)
-% blindly reprinting a title that is obvious from the URL is annoying.
-% <@metallic> http://tech.slashdot.org/story/10/06/08/2158202/2-In-3-Misunderstand-Gas-Mileage-Heres-Why?art_pos=2
-% 20:05 < abbot> url "Slashdot Technology Story | 2 In 3 Misunderstand Gas Mileage; Here's Why" http://tinyurl.com/276wyqq
 % let's try and decide if the URL contains most of the title words
 % tokenize url and page title and figure out how similar they are
+% better to err on the side of false positives
 url_title_fuzzymatch(Url, Title) ->
-	UrlTok = ordsets:from_list(string:tokens(string:to_lower(Url), " :/.-?&|_")),
-	TitleTok = ordsets:from_list(string:tokens(string:to_lower(Title), " :/.-?&|_")),
-	Intersect = ordsets:intersection(UrlTok, TitleTok),
-	ordsets:size(Intersect) / ordsets:size(TitleTok) >= 2/3. % TODO: test magic "close" percentage
+	SplitBy = " :/.-?!&|_'", % no standard for [[[:punct:]], eh?
+	UrlTok = string:tokens(string:to_lower(Url), SplitBy),
+	TitleTok = string:tokens(string:to_lower(Title), SplitBy),
+	case length(TitleTok) of
+		0 -> true;
+		N -> substr_count(TitleTok, UrlTok) / N >= 2/3
+		end.
+
+test_url_title_fuzzymatch() ->
+	[
+		{ [ "", "" ], true },
+		{ [ " ", " " ], true },
+		{ [ "http://www.yahoo.com/", "Yahoo!" ], true },
+		{ [ "http://www.jimspancakes.com/2010/06/just-got-an-iphone-4g-its-delicious/", "Just got an iPhone 4g- it's delicious! - Pancake art | Jim's Pancakes" ], true }
+	].
 
 % given an arbitrary string, produce a list of all
 % http urls contained within
