@@ -33,6 +33,7 @@
 -import(test).
 -import(irc).
 -import(ircutil).
+-import(util).
 
 -define(max_terms, 8).
 
@@ -58,11 +59,15 @@ loop() ->
 			loop();
 		% scan all lines for possible queries or definitions
 		{act, Pid, Irc, Msg, Dst, Nick, Txt} ->
-			multiword(Pid, Irc, Msg, Dst, Nick, Txt),
+			% FIXME: hard-coded bot name
+			if Nick /= "mod_spox" ->
+				multiword(Pid, Irc, Msg, Dst, Nick, Txt);
+				true -> nil
+			end,
 			loop();
 		% help
 		{help, Pid, Dst, Nick} ->
-			Pid ! { pipe, 
+			Pid ! { q, 
 				[ irc:resp(Dst, Nick, Nick ++ ": " ++ Txt) || Txt <-
 					[
 						"[Term, \"is\" | Def]   -> remember Term => Def",
@@ -87,7 +92,11 @@ multiword(Pid, Irc, Msg, Dst, Nick, [First,Second|Rest]=Txt) ->
 					case termdef(Txt) of
 						{_,_,[]} -> 0;
 						{[],Connect,Def} -> question(Pid, Irc, Msg, Dst, Nick, {[], Connect, Def});
-			  		Foo -> answer(Pid, Irc, Msg, Dst, Nick, Foo) 
+						{Term,Connect,Def2} ->
+							if
+								length(Term) =< 5 -> answer(Pid, Irc, Msg, Dst, Nick, {Term,Connect,Def2});
+								true -> nil
+							end
 					end
 			end
 	end;
@@ -128,8 +137,10 @@ termdef(Txt) ->
 				[H|T] = Def,
 				{H,T}
 		end,
-	io:format("termdef(~p) -> {~p,~p,~p}~n", [Txt,Term,Connect,Def2]),
-	{Term,Connect,Def2}.
+	Term2 = util:ltrim(Term, $"), % FIXME: what i really want is takewhile(ispunct, Term)
+	Def3 = util:rtrim(Def2, $"),
+	io:format("termdef(~p) -> {~p,~p,~p}~n", [Txt,Term2,Connect,Def3]),
+	{Term2,Connect,Def3}.
 
 question(Pid, Irc, Msg, Dst, Nick, {Def, [], []}) ->
 	io:format("question(Def=~p)~n", [Def]),
@@ -203,7 +214,17 @@ dict_forget(Pid, Irc, Dst, Nick, Term) ->
 % list all the topics i know about
 dict_list(Pid, Irc, Msg, Dst, Nick) ->
 	Is = irc:state(Irc, is, dict:new()),
-	Answer = util:join(",", [ K || {K,_} <- lists:sort(dict:to_list(Is)) ]),
-	io:format("dict_list=~s~n", [Answer]),
-	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Answer) }.
+	Keys = [ K || {K,_} <- dict:to_list(Is) ],
+	KeysNoQuotes =
+		lists:filter(
+			fun(S) ->
+				(string:chr(S, $")  == 0) and
+				(string:str(S, ",") == 0) and
+				(string:str(S, " ") == 0) end,
+			Keys),
+	KeysSort = lists:sort(fun(A,B)-> length(A) < length(B) end, KeysNoQuotes),
+	Answer = util:join(", ", KeysSort),
+	Answer2 = ircutil:dotdotdot(Answer, 400),
+	io:format("dict_list=~s~n", [Answer2]),
+	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Answer2) }.
 
