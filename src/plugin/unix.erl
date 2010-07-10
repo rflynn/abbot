@@ -12,7 +12,12 @@
 -include_lib("../irc.hrl").
 -import(test).
 -import(irc).
+-import(cgi).
 -import(util).
+
+-define(md5r_timeout, 5000).
+%-define(md5r_url, "http://md5.gromweb.com/query/").
+-define(md5r_url, "http://md5.noisette.ch/md5.php?hash=").
 
 test() ->
 	true.
@@ -20,31 +25,22 @@ test() ->
 loop() ->
 	receive
 		{ act, Pid, Irc, Msg, Dst, Nick, ["dig" , Domain]} ->
-			dig(Pid, Irc, Msg, Dst, Nick, Domain),
+			dig(Pid, Irc, Msg, Dst, Nick, Domain, "a"),
+			loop();
+		{ act, Pid, Irc, Msg, Dst, Nick, ["dig", Type, Domain]} ->
+			dig(Pid, Irc, Msg, Dst, Nick, Domain, Type),
 			loop();
 		{ act, Pid, Irc, Msg, Dst, Nick, ["echo" | Txt]} ->
 			echo(Pid, Irc, Msg, Dst, Nick, Txt),
 			loop();
-		{ act, Pid, Irc, Msg, Dst, Nick, ["grep", Regexp | Txt]} ->
-			grep(Pid, Irc, Msg, Dst, Nick, Regexp, Txt),
-			loop();
-		{ act, Pid, Irc, Msg, Dst, Nick, ["head" | Txt]} ->
-			head(Pid, Irc, Msg, Dst, Nick, Txt),
-			loop();
-		{ act, Pid, Irc, Msg, Dst, Nick, ["last" | Txt]} ->
-			last(Pid, Irc, Msg, Dst, Nick, Txt),
-			loop();
 		{ act, Pid, Irc, Msg, Dst, Nick, ["md5" | Txt]} ->
 			md5(Pid, Irc, Msg, Dst, Nick, Txt),
 			loop();
-		{ act, Pid, Irc, Msg, Dst, Nick, ["rep", N | Txt]} ->
-			rep(Pid, Irc, Msg, Dst, Nick, list_to_integer(N), Txt),
+		{ act, Pid, Irc, Msg, Dst, Nick, ["md5r", MD5Sum]} ->
+			md5r(Pid, Irc, Msg, Dst, Nick, MD5Sum),
 			loop();
 		{ act, Pid, Irc, Msg, Dst, Nick, ["sort" | Txt]} ->
 			sort(Pid, Irc, Msg, Dst, Nick, Txt),
-			loop();
-		{ act, Pid, Irc, Msg, Dst, Nick, ["tail" | Txt]} ->
-			tail(Pid, Irc, Msg, Dst, Nick, Txt),
 			loop();
 		{ act, Pid, Irc, Msg, Dst, Nick, ["wc" | Txt]} ->
 			wc(Pid, Irc, Msg, Dst, Nick, Txt),
@@ -55,27 +51,30 @@ loop() ->
 			Pid ! { q,
 				[ irc:resp(Dst, Nick, Nick ++ ": " ++ Txt) || Txt <-
 					[
-						"[\"echo\",  | Txt] -> print Txt",
-						"[\"grep\", Regexp | Txt] -> filter text via regexp",
-						"[\"head\",  | Txt] -> first item",
-						"[\"last\",  | Txt] -> last item",
-						"[\"md5\",   | Txt] -> md5 checksum Txt",
-						"[\"rep\", N | Txt] -> repeat Txt N times",
-						"[\"sort\"   | Txt] -> sort Txt",
-						"[\"tail\",  | Txt] -> opposite of head",
-						"[\"wc\"     | Txt] -> word count"
+						"[\"dig\",  | Domain] -> DNS records check",
+						"[\"echo\", | Txt] -> print Txt",
+						"[\"md5\",  | Txt] -> md5 checksum Txt",
+						"[\"md5r\", | MD5Sum] -> reverse an md5 sum",
+						"[\"sort\"  | Txt] -> sort Txt",
+						"[\"wc\"    | Txt] -> word count"
 					]
 				] },
 			loop()
 	end.
 
-dig(_, _, _, _, _, []) -> nil;
-dig(Pid, _, Msg, Dst, Nick, Domain) ->
+dig(_, _, _, _, _, [], _) -> nil;
+dig(Pid, _, Msg, Dst, Nick, Domain, "a")   -> dig_(Pid, Msg, Dst, Nick, Domain, "a");
+dig(Pid, _, Msg, Dst, Nick, Domain, "any") -> dig_(Pid, Msg, Dst, Nick, Domain, "any");
+dig(Pid, _, Msg, Dst, Nick, Domain, "mx")  -> dig_(Pid, Msg, Dst, Nick, Domain, "mx");
+dig(Pid, _, Msg, Dst, Nick, Domain, "txt") -> dig_(Pid, Msg, Dst, Nick, Domain, "txt");
+dig(_, _, _, _, _, _, _) -> nil.
+
+dig_(Pid, Msg, Dst, Nick, Domain, Type) ->
 	{ok, Re} = re:compile("^([a-zA-Z0-9-]+\.)+[a-zA-Z]+$"),
 	case re:run(Domain, Re) of
 		nomatch -> nil;
 		{match, _} ->
-			Run = "dig " ++ Domain ++ " | grep \"^[^;]\" | head -n 1 | sed -e's/\\t/ /g'",
+			Run = "dig " ++ Type ++ " " ++ Domain ++ " | grep \"^[^;]\" | head -n 1 | sed -e's/\\t/ /g'",
   		Out = os:cmd(Run),
 			Lines = string:tokens(Out, "\r\n"),
 			Res = hd(Lines),
@@ -95,16 +94,6 @@ grep(Pid, _, Msg, Dst, Nick, Regexp, Txt) ->
 		true        -> nil
 	end.
 
-head(_, _, _, _, _, []) -> nil;
-head(Pid, _, Msg, Dst, Nick, Txt) ->
-	Res = hd(Txt),
-	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Res)}.
-
-last(_, _, _, _, _, []) -> nil;
-last(Pid, _, Msg, Dst, Nick, Txt) ->
-	Res = lists:last(Txt),
-	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Res)}.
-
 md5(_, _, _, _, _, []) -> nil;
 md5(Pid, _, Msg, Dst, Nick, _) ->
 	In = string:substr(Msg#ircmsg.rawtxt, length("md5")+1),
@@ -114,24 +103,32 @@ md5(Pid, _, Msg, Dst, Nick, _) ->
 	Res = util:join("", Hex),
 	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Res)}.
 
-rep(_, _, _, _, _, _, []) -> nil;
-rep(Pid, _, Msg, Dst, Nick, N, Txt) when N > 0 ->
-	Txt2 = util:j(Txt),
-	Res = util:join("", lists:duplicate(N, Txt2)),
-	Res2 = ircutil:dotdotdot(Res, 200),
-	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Res2)};
-rep(_, _, _, _, _, _, _) -> nil.
+md5r(Pid, _Irc, Msg, Dst, Nick, MD5Sum) ->
+	case length(MD5Sum) of
+		32 ->
+  		Url = ?md5r_url ++ cgi:url_encode(MD5Sum),
+  		case http:request(get,{Url,[]},[{timeout, ?md5r_timeout}],[]) of
+    		{ok, {{_Http, _Code, _Msg}, _Header, Content}} ->
+					Content2 =
+						case string:str(Content, "</error>") of
+							0 ->
+								% fugly
+								Prefix = string:substr(Content, string:rstr(Content, "<![CDATA[")+9),
+								"\"" ++ string:substr(Prefix, 1, string:rstr(Prefix, "]]")-1) ++ "\"";
+							_ -> "?"
+							end,
+					Resp = Nick ++ ": " ++ MD5Sum ++ " = md5(" ++ Content2 ++ ")",
+					Pid ! {pipe, Msg, irc:resp(Dst, Nick, Resp)};
+    		{error, _Why} -> nil
+    		end;
+		_ -> nil
+	end.
 
 sort(Pid, _, Msg, Dst, Nick, ["-r" | Txt]) ->
 	Res = util:j(lists:reverse(lists:sort(Txt))),
 	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Res)};
 sort(Pid, _, Msg, Dst, Nick, Txt) ->
 	Res = util:j(lists:sort(Txt)),
-	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Res)}.
-
-tail(_, _, _, _, _, []) -> nil;
-tail(Pid, _, Msg, Dst, Nick, Txt) ->
-	Res = util:j(tl(Txt)),
 	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Res)}.
 
 wc(Pid, _, Msg, Dst, Nick, Txt) ->
