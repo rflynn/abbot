@@ -18,6 +18,7 @@
 		strsplit/2,
 		tokens/3,
 		show/1,
+		find_or/3,
 		nth/3,
 		unescape/1,
 		lines/1,
@@ -25,7 +26,14 @@
 		readlines/1,
 		ensure_dir/1,
 		hex/1,
-		hex/2
+		hex/2,
+		islower/1,
+		isupper/1,
+		isdigit/1,
+		isalpha/1,
+		isalnum/1,
+		shell_escape/1,
+		timestamp/0
 	]).
 -import(test).
 
@@ -42,7 +50,8 @@ test() ->
 			{ tokens,		test_tokens()			},
 			{	strsplit,	test_strsplit()		},
 			{	hex,			test_hex()				},
-			{	hex,			test_hex2()				}
+			{	hex,			test_hex2()				},
+			{	shell_escape, test_shell_escape()		}
 		]).
 
 hd([], Else) -> Else;
@@ -272,6 +281,13 @@ test_unescape() ->
 		{ [ "\\\"a\\\n\\\b\\\"" ], "\"a\n\b\""}
 	].
 
+% return a dict entry if found or something else instead
+find_or(Key, Dict, Or) ->
+	case dict:find(Key, Dict) of
+		error -> Or;
+		{ok, Val} -> Val
+	end.
+
 nth(0, _, Else) ->
 	Else;
 nth(N, List, Else) when N > 0 ->
@@ -422,4 +438,51 @@ test_hex2() ->
 		{ [ 255, 2 ], "FF"  },
 		{ [ 256, 3 ], "100" }
 	].
+
+islower(C) when C >= $a and (C =< $z) -> true;
+islower(_) -> false.
+
+isupper(C) when C >= $A and (C =< $Z) -> true;
+isupper(_) -> false.
+
+isdigit(C) when C >= $0 and (C =< $9) -> true;
+isdigit(_) -> false.
+
+isalpha(C) -> islower(C) or isupper(C).
+
+isalnum(C) -> isalpha(C) or isdigit(C).
+
+% prepare code for being run in a shell
+% escape: ", $
+shell_escape(Str) ->
+  %{ok, Match} = re:compile("[\"$`]"),
+  %re:replace(Str, Match,"\\&", [{return, list}]).
+	% bloody hell, the re module doesn't seem to be working
+  esc_(Str, []).
+
+esc_([], Esc) ->
+  Esc;
+esc_("`" ++ Unesc, Esc) ->
+  esc_(Unesc, Esc ++ "\\\`");
+esc_("\"" ++ Unesc, Esc) ->
+  esc_(Unesc, Esc ++ "\\\"");
+esc_("$" ++ Unesc, Esc) ->
+  esc_(Unesc, Esc ++ "\\$");
+esc_([C|Unesc], Esc) ->
+  esc_(Unesc, Esc ++ [C]).
+
+test_shell_escape() ->
+	[
+  	{ [ "" ], "" },
+  	{ [ " " ], " " },
+  	{ [ "\"" ], "\\\"" },
+  	{ [ "`ls`" ], "\\\`ls\\\`" },
+  	{ [ "$SAFE=4" ], "\\\$SAFE=4" }
+	].
+
+
+timestamp() ->
+	{{Year,Month,Day},{Hour,Min,Sec}} = erlang:localtime(),
+	lists:flatten(io_lib:format("~4..0B-~2..0B-~2..0B ~2..0B:~2..0B:~2..0B",
+		[Year,Month,Day,Hour,Min,Sec])).
 
