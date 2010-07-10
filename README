@@ -1,3 +1,6 @@
+% abbot is an erlang irc bot.
+% features are implemented as plugins around a simple, stable core.
+% abbot plugins can be added, modified and restarted *while the bot is running*.
 %           _     _           _   
 %     /\   | |   | |         | |  
 %    /  \  | |__ | |__   ___ | |_ 
@@ -18,8 +21,14 @@ get_started() ->
   "modify bot.erl 'master', 'pass' and 'chan' -defines",
   "make",
   "./abbot.sh",
-  % in shell type:
+  % in erlang shell launch bot...
   Bot0 = spawn(bot, go, ["irc.dal.net"]).
+  % then, in your irc client...
+  /msg abbot master <yournick> <masterpass>
+  % should reply "hello, master."
+  % to learn more, in irc client:
+  abbot: help
+  abbot: help cmd
 
 kill_bot() ->
   Bot0 ! quit.
