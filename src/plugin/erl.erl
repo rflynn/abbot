@@ -3,7 +3,7 @@
 % allow us to eval erlang code
 
 -module(erl).
--author("pizza@parseerror.com").
+-author("parseerror+abbot@gmail.com").
 -export([
 	test/0,
 	loop/0,
@@ -71,9 +71,9 @@ exec(Code) ->
 		nil, true, false,
 		hd, tl, apply,
 		lists,
-			any,all,delete,dropwhile,filter,flatten,foldl,foldr,foreach,last,map,max,min,member,merge,nth,nthtail,partition,prefix,reverse,sort,split,splitwith,subtract,tail,unzip,usort,zip,zip3,zipwith,
+			any,all,delete,dropwhile,filter,flatten,foldl,foldr,foreach,last,map,max,min,member,merge,nth,nthtail,partition,prefix,reverse,sort,split,splitwith,subtract,sum,tail,unzip,usort,zip,zip3,zipwith,
 		string,
-			substr,
+			substr,str,span,cspan,tokens,
 		io_lib,
 			format,
 		math,
@@ -84,8 +84,8 @@ exec(Code) ->
 % HOW TO ALLOW A SAFE SUBSET:
 % Restrict everything
 % TODO: Restrict maximum exec time to something small
-% DONE: rESTRICT ATOMS allowed to a WHITELIST
-% TODO? Restruct integer values even, if we ever want to allow i.e. lists:seq
+% DONE: RESTRICT ATOMS allowed to a WHITELIST
+% TODO? Restrict integer values even, if we ever want to allow i.e. lists:seq
 
 contains([], _) -> false;
 contains([H|T], Item) ->
@@ -112,7 +112,7 @@ enumerate_naughty(Tok) ->
 
 eval(Str) ->
   try
-		%io:format("Str=~p~n", [Str]),
+		io:format("Str=~p~n", [Str]),
     case erl_scan:string(Str) of
 			{error, _, _} ->
 				"syntax error";
