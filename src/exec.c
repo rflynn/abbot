@@ -1,8 +1,9 @@
 /* ex: set ts=2 et: */
 /* $Id$ */
 /*
- * front-end to exec code with limits on time and resource usage;
- * protection of the underlying machine still relies on the language
+ * exec() cmdline parameters with a strict time-limit.
+ * meant for running code samples and returning the result.
+ * I'm sure it's a horrible security hazard.
  */
 
 #include <assert.h>
