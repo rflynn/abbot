@@ -37,6 +37,9 @@ loop() ->
 		{ act, Pid, Irc, Msg, Dst, Nick, ["insult", Who, "momma"]} ->
 			yourmom(Pid, Irc, Msg, Dst, Nick, Who),
 			loop();
+		{ act, Pid, Irc, Msg, Dst, Nick, ["insult" | _]} ->
+			insult(Pid, Irc, Msg, Dst, Nick, Nick),
+			loop();
 		{ act, Pid, Irc, Msg, Dst, Nick, ["your", "mom"]} ->
 			yourmom(Pid, Irc, Msg, Dst, Nick, "your"),
 			loop();
@@ -72,6 +75,13 @@ loop() ->
 			loop();
 		{ act, Pid, Irc, Msg, Dst, Nick, ["apologize", Who]} ->
 			apologize(Pid, Irc, Msg, Dst, Nick, Who),
+			loop();
+		% act insulted
+		{ act, Pid, Irc, Msg, Dst, Nick, ["stupid", "bot"]} ->
+			sad(Pid, Irc, Msg, Dst, Nick),
+			loop();
+		{ act, Pid, Irc, Msg, Dst, Nick, ["stupid", "bots"]} ->
+			sad(Pid, Irc, Msg, Dst, Nick),
 			loop();
 		{ act, _, _, _, _, _, _ } ->
 			loop();
@@ -134,4 +144,8 @@ insult(Pid, Irc, Msg, Dst, Nick, Who, Connect, Path) ->
 			Pid ! {pipe, Msg, irc:resp(Dst, Nick, Who ++ Connect ++ Line2)};
 		true -> nil
 	end.
+
+sad(Pid, _, Msg, Dst, Nick) ->
+	Resp = ":'(",
+	Pid ! {pipe, Msg, irc:resp(Dst, Nick, Resp)}.
 
