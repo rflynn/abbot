@@ -20,6 +20,7 @@
 -define(timeout,				 5000).
 -define(stories_max,     5).
 -define(stories_default, 1).
+-define(title_len,       120). % fark headlines are so fucking long
 
 test() ->
 	true.
@@ -78,8 +79,8 @@ ok(Pid, Msg, Dst, Nick, Cnt, Content) ->
 				lists:flatten(
 					% FIXME: fark has really long headlines. should we chop them way down or
 					% perhaps do some fancy multiline formatting?
-					io_lib:format("fark ~-100s ~s",
-						[ ircutil:dotdotdot(cgi:entity_decode(Title), 100), tinyurl(Url)])))
+					io_lib:format("[f] ~-" ++ integer_to_list(?title_len) ++ "s ~s",
+						[ ircutil:dotdotdot(cgi:entity_decode(Title), ?title_len), tinyurl(Url)])))
 			|| [Title,Url] <- string:substr(Items, 1, Cnt2)
 		] }.
 

@@ -17,6 +17,7 @@
 -define(timeout,				 5000).
 -define(stories_max,     5).
 -define(stories_default, 1).
+-define(title_len,       60).
 
 test() ->
 	true.
@@ -80,8 +81,8 @@ ok(Pid, Msg, Dst, Nick, Cnt, Content) ->
 		[
 			irc:resp(Dst, Nick,
 				lists:flatten(
-					io_lib:format("/. ~-55s ~s",
-						[ ircutil:dotdotdot(cgi:entity_decode(Title), 55), tinyurl(Url)])))
+					io_lib:format("/. ~-" ++ integer_to_list(?title_len) ++ "s ~s",
+						[ ircutil:dotdotdot(cgi:entity_decode(Title), ?title_len), tinyurl(Url)])))
 			|| [Title,_Descr,Url] <- string:substr(Items, 1, Cnt2)
 		] }.
 
