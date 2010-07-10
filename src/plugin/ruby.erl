@@ -118,7 +118,7 @@ test_eval() ->
 % simulate this by trying to run the non-existent "exec2" program
 % we should behave reasonably
 eval_oops(Ruby) ->
-  Run = "./exec2 /usr/bin/ruby \"-e puts Thread.start{ \\$SAFE=4; " ++ escape(Ruby) ++ " }.join.value.inspect\"",
+  Run = "./exec2 /usr/bin/env ruby \"-e puts Thread.start{ \\$SAFE=4; " ++ escape(Ruby) ++ " }.join.value.inspect\"",
   io:format("Ruby=<~s> Run=~p~n", [Ruby, Run]), % print all commands, so we can see 
   Out = os:cmd(Run),
 	Lines = string:tokens(Out, "\r\n"),
