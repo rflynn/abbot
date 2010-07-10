@@ -162,8 +162,15 @@ loop(Irc, Plugins) ->
 pipe_parse(#ircmsg{rawtxt=[]}=Msg) ->
 	Msg;
 pipe_parse(#ircmsg{rawtxt=Rawtxt}=Msg) ->
-	[ First | Rest ] =
-		[ util:trim(P) || P <- util:strsplit(Rawtxt, " | ") ],
+	case string:substr(Rawtxt, 1, 2) of
+		% FIXME: special-case skip piping for Haskell source
+		"> " ->
+			First = Rawtxt,
+			Rest = [];
+		_ ->
+		[ First | Rest ] =
+			[ util:trim(P) || P <- util:strsplit(Rawtxt, " | ") ]
+		end,
 	Msg2 = Msg#ircmsg{
 		txt = string:tokens(First, " "),
 		rawtxt=First,
